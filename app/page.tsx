@@ -20,29 +20,29 @@ const generateHtmlFromNodes = (nodes) => {
   return nodes
     .map((node) => {
       let element = '';
-      const className = `figma-node figma-${node.type.toLowerCase()}`
-      const idName = `figma-id-${node.id}`;
+      const baseClass = `${node.type.toLowerCase()}`;
+      const uniqueClass = `${baseClass}-${node.id.split(':')[0]}`;
 
       switch (node.type) {
         case 'FRAME':
         case 'GROUP':
         case 'COMPONENT':
-          element = `<div id="${idName}" class="${className}">
-          ${node.children ? generateHtmlFromNodes(node.children) : ''}
-        </div>`;
+          element = `<div class="${baseClass} ${uniqueClass}">
+            ${node.children ? generateHtmlFromNodes(node.children) : ''}
+          </div>`;
           break;
         case 'TEXT':
-          element = `<p id="${idName}" class="${className}">${node.characters || ''}</p>`;
+          element = `<p class="${baseClass} ${uniqueClass}">${node.characters || ''}</p>`;
           break;
         case 'RECTANGLE':
         case 'ELLIPSE':
-          element = `<div id="${idName}" class="${className}"></div>`;
+          element = `<div class="${baseClass} ${uniqueClass}"></div>`;
           break;
         case 'IMAGE':
-          element = `<img id="${idName}" src="images/${node.id}.png" class="${className}" alt="${node.name || 'Figma Image'}" />`;
+          element = `<img src="images/${node.id.split(':')[0]}.png" class="${baseClass} ${uniqueClass}" alt="${node.name || 'Figma Image'}" />`;
           break;
         default:
-          console.warn(`Unhandled Figma node type for HTML generation: ${node.type}`);
+          console.warn(`Unhandled Figma node type: ${node.type}`);
           element = node.children ? generateHtmlFromNodes(node.children) : '';
       }
       return element;
@@ -51,22 +51,22 @@ const generateHtmlFromNodes = (nodes) => {
 };
 
 const generateCssFromStyles = (node) => {
-  if (!node || !node.type || !node.id) {
+  if (!node || !node.type || !node.id.split(':')[0]) {
     return '';
   }
 
   const styles = [];
-  const selector = `#figma-id-${node.id}`;
+  const idSelector = `#${node.id.split(':')[0]}`;
+  const typeSelector = `.type-${node.type.toLowerCase()}`;
   const cssRules = [];
 
   if (node.absoluteBoundingBox) {
-    const { x, y, width, height } = node.absoluteBoundingBox;
-    cssRules.push(`  position: absolute;`);
-    cssRules.push(`  left: ${toCSSUnit(x)};`);
-    cssRules.push(`  top: ${toCSSUnit(y)};`);
-    cssRules.push(`  width: ${toCSSUnit(width)};`);
-    cssRules.push(`  height: ${toCSSUnit(height)};`);
-    cssRules.push(`  box-sizing: border-box;`);
+    const { width, height } = node.absoluteBoundingBox;
+    cssRules.push(`width: ${toCSSUnit(width)}`);
+    cssRules.push(`height: ${toCSSUnit(height)}`);
+    cssRules.push(`box-sizing: border-box`);
+    cssRules.push(`display: flex`);
+    cssRules.push(`flex-direction: column`);
   }
 
   if (node.fills && Array.isArray(node.fills) && node.fills.length > 0) {
@@ -76,9 +76,9 @@ const generateCssFromStyles = (node) => {
         if (fill.type === 'SOLID' && fill.color) {
           const { r, g, b } = fill.color;
           const alpha = fill.opacity !== undefined ? fill.opacity : (fill.color.a !== undefined ? fill.color.a : 1);
-          cssRules.push(`  background-color: rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${alpha.toFixed(2)});`);
+          cssRules.push(`background-color:rgba(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)},${alpha.toFixed(2)})`);
         } else {
-            console.warn(`Unhandled fill type for node ${node.id}: ${fill.type}`);
+            console.warn(`Unhandled fill type: ${fill.type}`);
         }
      }
   } else if (node.type === 'TEXT') {
@@ -86,25 +86,28 @@ const generateCssFromStyles = (node) => {
           const fill = node.style.fills[0];
           const { r, g, b } = fill.color;
           const alpha = fill.opacity !== undefined ? fill.opacity : (fill.color.a !== undefined ? fill.color.a : 1);
-          cssRules.push(`  color: rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${alpha.toFixed(2)});`);
+          cssRules.push(`color:rgba(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)},${alpha.toFixed(2)})`);
       }
   }
 
   if (node.type === 'TEXT' && node.style) {
-    if (node.style.fontFamily) cssRules.push(`  font-family: "${node.style.fontFamily}";`);
-    if (node.style.fontSize) cssRules.push(`  font-size: ${node.style.fontSize}px;`);
-    if (node.style.fontWeight) cssRules.push(`  font-weight: ${node.style.fontWeight};`);
+    if (node.style.fontFamily) cssRules.push(`font-family:"${node.style.fontFamily}"`);
+    if (node.style.fontSize) cssRules.push(`font-size:${node.style.fontSize}px`);
+    if (node.style.fontWeight) cssRules.push(`font-weight:${node.style.fontWeight}`);
+    if (node.style.letterSpacing) cssRules.push(`letter-spacing:${node.style.letterSpacing}px`);
     if (node.style.lineHeightPx) {
-        cssRules.push(`  line-height: ${node.style.lineHeightPx}px;`);
+        cssRules.push(`line-height:${node.style.lineHeightPx}px`);
     } else if (node.style.lineHeightPercent) {
-        cssRules.push(`  line-height: ${node.style.lineHeightPercent}%;`);
+        cssRules.push(`line-height:${node.style.lineHeightPercent}%`);
     } else if (node.style.lineHeight && node.style.lineHeight.unit !== 'AUTO') {
         const unit = node.style.lineHeight.unit === 'PIXELS' ? 'px' : '%';
-        cssRules.push(`  line-height: ${node.style.lineHeight.value}${unit};`);
+        cssRules.push(`line-height:${node.style.lineHeight.value}${unit}`);
     }
-     if (node.style.textAlignHorizontal) {
-        cssRules.push(`  text-align: ${node.style.textAlignHorizontal.toLowerCase()};`);
-     }
+    if (node.style.textAlignHorizontal) {
+        cssRules.push(`text-align:${node.style.textAlignHorizontal.toLowerCase()}`);
+    }
+    cssRules.push(`margin:0`);
+    cssRules.push(`padding:0`);
   }
 
   if (node.strokes && node.strokes.length > 0 && node.strokeWeight) {
@@ -112,20 +115,25 @@ const generateCssFromStyles = (node) => {
       if (stroke.type === 'SOLID' && stroke.color) {
           const { r, g, b } = stroke.color;
           const alpha = stroke.opacity !== undefined ? stroke.opacity : (stroke.color.a !== undefined ? stroke.color.a : 1);
-          cssRules.push(`  border: ${node.strokeWeight}px solid rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${alpha.toFixed(2)});`);
+          cssRules.push(`border:${node.strokeWeight}px solid rgba(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)},${alpha.toFixed(2)})`);
       }
   }
 
   if (node.cornerRadius) {
        if (typeof node.cornerRadius === 'number' && node.cornerRadius > 0) {
-           cssRules.push(`  border-radius: ${node.cornerRadius}px;`);
+           cssRules.push(`border-radius:${node.cornerRadius}px`);
        }
   }
 
   if (cssRules.length > 0) {
-    styles.push(`${selector} {`);
-    styles.push(...cssRules);
-    styles.push(`}`);
+    const baseClass = `${node.type.toLowerCase()}-${node.id.split(':')[0]}`;
+    styles.push(`.${baseClass}{${cssRules.join(';')}}`);  // Add specific styles using base class
+  }
+
+  // Add shared type-based styles
+  if (node.type === 'FRAME' || node.type === 'GROUP' || node.type === 'COMPONENT') {
+    const baseClass = `${node.type.toLowerCase()}`;
+    styles.push(`.${baseClass}{display:flex;flex-direction:column;align-items:stretch;width:100%;height:100%;margin:0;padding:0}`);
   }
 
   if (node.children && Array.isArray(node.children)) {
@@ -134,7 +142,14 @@ const generateCssFromStyles = (node) => {
     });
   }
 
-  return styles.filter(Boolean).join('\n\n');
+  // Add frame-specific styles
+  if (node.type === 'FRAME') {
+    const baseClass = `${node.type.toLowerCase()}`;
+    styles.push(`.${baseClass}{background-color:#F6F6F8;min-height:100vh;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;margin:0;padding:0}`);
+  }
+
+  return styles.filter(Boolean).join('\n');
+
 };
 
 export default function Home() {
@@ -319,7 +334,7 @@ export default function Home() {
     }
 
     const htmlContent = selectedFrameNodes.map(frame => {
-        return `<div class="figma-frame-wrapper" id="wrapper-${frame.id}">
+        return `<div class="frame-wrapper">
           <h2>${frame.name}</h2>
           ${generateHtmlFromNodes([frame])}
         </div>`;
@@ -336,19 +351,6 @@ export default function Home() {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>${figmaData?.name || 'Figma Export'}</title>
         ${outputType === 'html' || outputType === 'both' ? '<link rel="stylesheet" href="styles.css">' : ''}
-        <style>
-          .figma-frame-wrapper {
-            margin: 20px;
-            padding: 15px;
-            border: 1px solid #eee;
-            border-radius: 8px;
-            position: relative;
-            overflow: hidden;
-          }
-          body {
-            font-family: sans-serif;
-          }
-        </style>
     </head>
     <body>
         <h1>${figmaData?.name || 'Figma Export'}</h1>
@@ -378,8 +380,8 @@ export default function Home() {
     const imageNodeIds = [];
 
     const findImageNodes = (node) => {
-      if (node.type === 'IMAGE' && node.id) {
-        imageNodeIds.push(node.id);
+      if (node.type === 'IMAGE' && node.id.split(':')[0]) {
+        imageNodeIds.push(node.id.split(':')[0]);
       }
       if (node.children && Array.isArray(node.children)) {
         node.children.forEach(findImageNodes);
@@ -503,7 +505,7 @@ export default function Home() {
 
       toast({ title: 'Generating ZIP', description: 'Preparing your download...' });
       const zipContent = await zip.generateAsync({ type: 'blob' });
-      const safeFilename = figmaData.name.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'figma-export';
+      const safeFilename = figmaData.name.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'export';
       saveAs(zipContent, `${safeFilename}.zip`);
 
       toast({
@@ -563,7 +565,7 @@ export default function Home() {
               disabled={!figmaUrl || !figmaToken || isProcessing}
               className="w-full sm:w-auto"
             >
-              {isProcessing ? 'Processing...' : 'Load Figma File'}
+              {isProcessing ? 'Processing...' : 'Submit'}
             </Button>
           </div>
         );
@@ -629,7 +631,7 @@ export default function Home() {
             </div>
              {(outputType === 'html' || outputType === 'both') && generatedFiles.html && (
                 <div className="mt-6">
-                    <h3 className="text-lg font-semibold mb-2">HTML Preview (structure)</h3>
+                    <h3 className="text-lg font-semibold mb-2">HTML Preview</h3>
                     <pre className="bg-muted p-4 rounded-md text-xs overflow-auto max-h-60">
                         <code>{generatedFiles.html}</code>
                     </pre>
@@ -658,7 +660,7 @@ export default function Home() {
           <div className="flex justify-center h-16 items-center">
             <div className="flex items-center">
               <Code className="h-8 w-8 text-primary" />
-              <span className="ml-2 text-xl font-bold">Figma To Code</span>
+              <span className="ml-2 text-xl font-bold">F2C</span>
             </div>
           </div>
         </div>
@@ -715,7 +717,7 @@ export default function Home() {
              <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
                 <FeatureCard
                     icon={<Download className="h-6 w-6 text-primary" />}
-                    title="1. Load & Select"
+                    title="1. Enter URL & Submit"
                     description="Paste your Figma file URL and Access Token. Choose the frames or components you need."
                 />
                 <FeatureCard
@@ -735,9 +737,9 @@ export default function Home() {
 
        <footer className="border-t mt-20 py-6">
            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-muted-foreground">
-               Figma To Code Converter | Basic tool for demonstration.
+               Figma To Code Converter
                <br/>
-               <span className="text-xs">Remember to handle Figma tokens securely in production applications.</span>
+               <span className="text-xs">Copyright</span>
            </div>
        </footer>
     </main>
