@@ -27,19 +27,61 @@ const generateHtmlFromNodes = (nodes) => {
         case 'FRAME':
         case 'GROUP':
         case 'COMPONENT':
-          element = `<div class="${baseClass} ${uniqueClass}">
-            ${node.children ? generateHtmlFromNodes(node.children) : ''}
-          </div>`;
+          // Check if this is the login form container
+          if (node.name.toLowerCase().includes('login') || node.name.toLowerCase().includes('form')) {
+            element = `<div class="${baseClass} ${uniqueClass} login-form">
+              ${node.children ? generateHtmlFromNodes(node.children) : ''}
+            </div>`;
+          } else {
+            element = `<div class="${baseClass} ${uniqueClass}">
+              ${node.children ? generateHtmlFromNodes(node.children) : ''}
+            </div>`;
+          }
           break;
         case 'TEXT':
-          element = `<p class="${baseClass} ${uniqueClass}">${node.characters || ''}</p>`;
+          // Handle specific text elements (e.g., heading, labels, links)
+          if (node.characters.toLowerCase().includes('login') && node.style?.fontSize >= 20) {
+            element = `<h2 class="${baseClass} ${uniqueClass}">${node.characters || ''}</h2>`;
+          } else if (node.characters.toLowerCase().includes('email') || node.characters.toLowerCase().includes('password')) {
+            // Check if this is a label for an input field
+            const hasInputSibling = node.parent?.children?.some(
+              child => child.type === 'RECTANGLE' && (child.name.toLowerCase().includes('email') || child.name.toLowerCase().includes('password'))
+            );
+            if (hasInputSibling) {
+              element = `<label class="${baseClass} ${uniqueClass}">${node.characters || ''}</label>`;
+            } else {
+              element = `<p class="${baseClass} ${uniqueClass}">${node.characters || ''}</p>`;
+            }
+          } else if (node.characters.toLowerCase().includes('forgot')) {
+            element = `<a href="#" class="${baseClass} ${uniqueClass}">${node.characters || ''}</a>`;
+          } else if (node.characters.toLowerCase().includes('remember')) {
+            element = `<label class="${baseClass} ${uniqueClass}">${node.characters || ''}</label>`;
+          } else {
+            element = `<p class="${baseClass} ${uniqueClass}">${node.characters || ''}</p>`;
+          }
           break;
         case 'RECTANGLE':
         case 'ELLIPSE':
-          element = `<div class="${baseClass} ${uniqueClass}"></div>`;
+          // Handle input fields, buttons, and checkboxes
+          if (node.name.toLowerCase().includes('email') || node.characters?.toLowerCase().includes('email')) {
+            element = `<input type="email" class="${baseClass} ${uniqueClass}" placeholder="Enter email address" />`;
+          } else if (node.name.toLowerCase().includes('password') || node.characters?.toLowerCase().includes('password')) {
+            element = `<input type="password" class="${baseClass} ${uniqueClass}" placeholder="Enter password" />`;
+          } else if (node.name.toLowerCase().includes('login') && node.name.toLowerCase().includes('button')) {
+            element = `<button class="${baseClass} ${uniqueClass}">Login</button>`;
+          } else if (node.name.toLowerCase().includes('checkbox')) {
+            element = `<input type="checkbox" class="${baseClass} ${uniqueClass}" />`;
+          } else {
+            element = `<div class="${baseClass} ${uniqueClass}"></div>`;
+          }
           break;
         case 'IMAGE':
           element = `<img src="images/${node.id.split(':')[0]}.png" class="${baseClass} ${uniqueClass}" alt="${node.name || 'Figma Image'}" />`;
+          break;
+        case 'VECTOR':
+        case 'BOOLEAN_OPERATION':
+          // Skip vector and boolean operation nodes (e.g., icons) for now, or handle as needed
+          element = '';
           break;
         default:
           console.warn(`Unhandled Figma node type: ${node.type}`);
@@ -56,100 +98,167 @@ const generateCssFromStyles = (node) => {
   }
 
   const styles = [];
-  const idSelector = `#${node.id.split(':')[0]}`;
-  const typeSelector = `.type-${node.type.toLowerCase()}`;
   const cssRules = [];
 
+  const baseClass = `${node.type.toLowerCase()}-${node.id.split(':')[0]}`;
+
+  // Handle dimensions (but avoid absolute positioning for layout)
   if (node.absoluteBoundingBox) {
     const { width, height } = node.absoluteBoundingBox;
     cssRules.push(`width: ${toCSSUnit(width)}`);
     cssRules.push(`height: ${toCSSUnit(height)}`);
     cssRules.push(`box-sizing: border-box`);
-    cssRules.push(`display: flex`);
-    cssRules.push(`flex-direction: column`);
   }
 
+  // Handle background and fills
   if (node.fills && Array.isArray(node.fills) && node.fills.length > 0) {
-     const visibleFills = node.fills.filter(fill => fill.visible !== false);
-     if (visibleFills.length > 0) {
-        const fill = visibleFills[0];
-        if (fill.type === 'SOLID' && fill.color) {
-          const { r, g, b } = fill.color;
-          const alpha = fill.opacity !== undefined ? fill.opacity : (fill.color.a !== undefined ? fill.color.a : 1);
-          cssRules.push(`background-color:rgba(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)},${alpha.toFixed(2)})`);
-        } else {
-            console.warn(`Unhandled fill type: ${fill.type}`);
-        }
-     }
-  } else if (node.type === 'TEXT') {
-      if (node.style?.fills && node.style.fills.length > 0 && node.style.fills[0].type === 'SOLID') {
-          const fill = node.style.fills[0];
-          const { r, g, b } = fill.color;
-          const alpha = fill.opacity !== undefined ? fill.opacity : (fill.color.a !== undefined ? fill.color.a : 1);
-          cssRules.push(`color:rgba(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)},${alpha.toFixed(2)})`);
+    const visibleFills = node.fills.filter(fill => fill.visible !== false);
+    if (visibleFills.length > 0) {
+      const fill = visibleFills[0];
+      if (fill.type === 'SOLID' && fill.color) {
+        const { r, g, b } = fill.color;
+        const alpha = fill.opacity !== undefined ? fill.opacity : (fill.color.a !== undefined ? fill.color.a : 1);
+        cssRules.push(`background-color: rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${alpha.toFixed(2)})`);
       }
+    }
   }
 
+  // Handle text styles
   if (node.type === 'TEXT' && node.style) {
-    if (node.style.fontFamily) cssRules.push(`font-family:"${node.style.fontFamily}"`);
-    if (node.style.fontSize) cssRules.push(`font-size:${node.style.fontSize}px`);
-    if (node.style.fontWeight) cssRules.push(`font-weight:${node.style.fontWeight}`);
-    if (node.style.letterSpacing) cssRules.push(`letter-spacing:${node.style.letterSpacing}px`);
+    if (node.style.fontFamily) cssRules.push(`font-family: "${node.style.fontFamily}"`);
+    if (node.style.fontSize) cssRules.push(`font-size: ${node.style.fontSize}px`);
+    if (node.style.fontWeight) cssRules.push(`font-weight: ${node.style.fontWeight}`);
+    if (node.style.letterSpacing) cssRules.push(`letter-spacing: ${node.style.letterSpacing}px`);
     if (node.style.lineHeightPx) {
-        cssRules.push(`line-height:${node.style.lineHeightPx}px`);
-    } else if (node.style.lineHeightPercent) {
-        cssRules.push(`line-height:${node.style.lineHeightPercent}%`);
-    } else if (node.style.lineHeight && node.style.lineHeight.unit !== 'AUTO') {
-        const unit = node.style.lineHeight.unit === 'PIXELS' ? 'px' : '%';
-        cssRules.push(`line-height:${node.style.lineHeight.value}${unit}`);
+      cssRules.push(`line-height: ${node.style.lineHeightPx}px`);
     }
     if (node.style.textAlignHorizontal) {
-        cssRules.push(`text-align:${node.style.textAlignHorizontal.toLowerCase()}`);
+      cssRules.push(`text-align: ${node.style.textAlignHorizontal.toLowerCase()}`);
     }
-    cssRules.push(`margin:0`);
-    cssRules.push(`padding:0`);
+    if (node.style.fills && node.style.fills.length > 0 && node.style.fills[0].type === 'SOLID') {
+      const fill = node.style.fills[0];
+      const { r, g, b } = fill.color;
+      const alpha = fill.opacity !== undefined ? fill.opacity : (fill.color.a !== undefined ? fill.color.a : 1);
+      cssRules.push(`color: rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${alpha.toFixed(2)})`);
+    }
   }
 
+  // Handle borders
   if (node.strokes && node.strokes.length > 0 && node.strokeWeight) {
-      const stroke = node.strokes[0];
-      if (stroke.type === 'SOLID' && stroke.color) {
-          const { r, g, b } = stroke.color;
-          const alpha = stroke.opacity !== undefined ? stroke.opacity : (stroke.color.a !== undefined ? stroke.color.a : 1);
-          cssRules.push(`border:${node.strokeWeight}px solid rgba(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)},${alpha.toFixed(2)})`);
-      }
+    const stroke = node.strokes[0];
+    if (stroke.type === 'SOLID' && stroke.color) {
+      const { r, g, b } = stroke.color;
+      const alpha = stroke.opacity !== undefined ? stroke.opacity : (stroke.color.a !== undefined ? stroke.color.a : 1);
+      cssRules.push(`border: ${node.strokeWeight}px solid rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${alpha.toFixed(2)})`);
+    }
   }
 
+  // Handle corner radius
   if (node.cornerRadius) {
-       if (typeof node.cornerRadius === 'number' && node.cornerRadius > 0) {
-           cssRules.push(`border-radius:${node.cornerRadius}px`);
-       }
+    if (typeof node.cornerRadius === 'number' && node.cornerRadius > 0) {
+      cssRules.push(`border-radius: ${node.cornerRadius}px`);
+    }
   }
 
+  // Handle shadows (effects)
+  if (node.effects && node.effects.length > 0) {
+    const shadowEffect = node.effects.find(effect => effect.type === 'DROP_SHADOW');
+    if (shadowEffect) {
+      const { r, g, b, a } = shadowEffect.color;
+      const { offset, radius } = shadowEffect;
+      cssRules.push(`box-shadow: ${offset.x}px ${offset.y}px ${radius}px rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${a})`);
+    }
+  }
+
+  // Add specific styles for the login form
+  if (node.name.toLowerCase().includes('login') || node.name.toLowerCase().includes('form')) {
+    cssRules.length = 0; // Clear previous rules to avoid conflicts
+    cssRules.push(`display: flex`);
+    cssRules.push(`flex-direction: column`);
+    cssRules.push(`align-items: center`);
+    cssRules.push(`padding: 20px`);
+    cssRules.push(`background-color: white`);
+    cssRules.push(`border-radius: 10px`);
+    cssRules.push(`box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1)`);
+    cssRules.push(`width: 350px`);
+    cssRules.push(`margin: 0 auto`);
+  }
+
+  // Add styles for inputs
+  if (node.name.toLowerCase().includes('email') || node.name.toLowerCase().includes('password') || node.characters?.toLowerCase().includes('email') || node.characters?.toLowerCase().includes('password')) {
+    if (node.type === 'RECTANGLE' || node.type === 'ELLIPSE') {
+      cssRules.length = 0; // Clear previous rules
+      cssRules.push(`padding: 10px`);
+      cssRules.push(`margin-bottom: 15px`);
+      cssRules.push(`border: 1px solid #ccc`);
+      cssRules.push(`border-radius: 5px`);
+      cssRules.push(`width: 100%`);
+      cssRules.push(`box-sizing: border-box`);
+    }
+  }
+
+  // Add styles for the button
+  if (node.name.toLowerCase().includes('login') && node.name.toLowerCase().includes('button')) {
+    cssRules.length = 0; // Clear previous rules
+    cssRules.push(`background-color: #1e3a8a`);
+    cssRules.push(`color: white`);
+    cssRules.push(`padding: 10px 20px`);
+    cssRules.push(`border: none`);
+    cssRules.push(`border-radius: 25px`);
+    cssRules.push(`cursor: pointer`);
+    cssRules.push(`width: 100%`);
+    cssRules.push(`font-weight: 600`);
+  }
+
+  // Add styles for the logo
+  if (node.type === 'IMAGE') {
+    cssRules.length = 0; // Clear previous rules
+    cssRules.push(`margin-bottom: 20px`);
+    cssRules.push(`display: block`);
+    cssRules.push(`margin-left: auto`);
+    cssRules.push(`margin-right: auto`);
+  }
+
+  // Add styles for the checkbox
+  if (node.name.toLowerCase().includes('checkbox')) {
+    cssRules.length = 0; // Clear previous rules
+    cssRules.push(`margin-right: 10px`);
+  }
+
+  // Add styles for the "Forgot Password?" link
+  if (node.name.toLowerCase().includes('forgot') || node.characters?.toLowerCase().includes('forgot')) {
+    cssRules.length = 0; // Clear previous rules
+    cssRules.push(`color: #1e90ff`);
+    cssRules.push(`text-decoration: none`);
+    cssRules.push(`margin-top: 10px`);
+  }
+
+  // Generate CSS for the current node
   if (cssRules.length > 0) {
-    const baseClass = `${node.type.toLowerCase()}-${node.id.split(':')[0]}`;
-    styles.push(`.${baseClass}{${cssRules.join(';')}}`);  // Add specific styles using base class
+    styles.push(`.${baseClass} { ${cssRules.join('; ')} }`);
   }
 
-  // Add shared type-based styles
-  if (node.type === 'FRAME' || node.type === 'GROUP' || node.type === 'COMPONENT') {
-    const baseClass = `${node.type.toLowerCase()}`;
-    styles.push(`.${baseClass}{display:flex;flex-direction:column;align-items:stretch;width:100%;height:100%;margin:0;padding:0}`);
-  }
-
+  // Recursively generate CSS for children
   if (node.children && Array.isArray(node.children)) {
     node.children.forEach((child) => {
       styles.push(generateCssFromStyles(child));
     });
   }
 
-  // Add frame-specific styles
+  // Add global styles for the frame
   if (node.type === 'FRAME') {
-    const baseClass = `${node.type.toLowerCase()}`;
-    styles.push(`.${baseClass}{background-color:#F6F6F8;min-height:100vh;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;margin:0;padding:0}`);
+    styles.push(`
+      .frame {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        background-color: #f6f6f6;
+      }
+    `);
   }
 
   return styles.filter(Boolean).join('\n');
-
 };
 
 export default function Home() {
@@ -289,16 +398,28 @@ export default function Home() {
               strokeWeight: child.strokeWeight,
               cornerRadius: child.cornerRadius,
               style: child.style,
+              characters: child.characters, // Include characters for TEXT nodes
+              effects: child.effects, // Include effects for shadows
             });
           }
         });
       } else if (node.children) {
-         node.children.forEach(findTopLevelNodes);
+        node.children.forEach(child => {
+          const updatedChild = { ...child };
+          if (child.type === 'TEXT') {
+            updatedChild.characters = child.characters;
+          }
+          if (child.effects) {
+            updatedChild.effects = child.effects;
+          }
+          child = updatedChild;
+          findTopLevelNodes(child);
+        });
       }
     };
 
     if (documentNode) {
-        findTopLevelNodes(documentNode);
+      findTopLevelNodes(documentNode);
     }
 
     return topLevelFrames;
@@ -330,18 +451,17 @@ export default function Home() {
     );
 
     if (!selectedFrameNodes.length) {
-        return { html: '', css: '' };
+      return { html: '', css: '' };
     }
 
     const htmlContent = selectedFrameNodes.map(frame => {
-        return `<div class="frame-wrapper">
-          <h2>${frame.name}</h2>
-          ${generateHtmlFromNodes([frame])}
-        </div>`;
+      return `<div class="frame-wrapper">
+        ${generateHtmlFromNodes([frame])}
+      </div>`;
     }).join('\n\n');
 
     const cssContent = selectedFrameNodes.map(frame =>
-        generateCssFromStyles(frame)
+      generateCssFromStyles(frame)
     ).join('\n\n');
 
     const fullHtml = `<!DOCTYPE html>
@@ -350,25 +470,21 @@ export default function Home() {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>${figmaData?.name || 'Figma Export'}</title>
-        ${outputType === 'html' || outputType === 'both' ? '<link rel="stylesheet" href="styles.css">' : ''}
+        <link rel="stylesheet" href="styles.css">
     </head>
     <body>
-        <h1>${figmaData?.name || 'Figma Export'}</h1>
-        ${htmlContent}
+        <div class="frame">
+          ${htmlContent}
+        </div>
     </body>
     </html>`;
 
     const fullCss = `
       body {
         margin: 0;
-        padding: 20px;
-        position: relative;
+        padding: 0;
+        font-family: Arial, sans-serif;
       }
-
-      h1, h2 {
-          margin-bottom: 1em;
-      }
-
       ${cssContent}
     `;
 
