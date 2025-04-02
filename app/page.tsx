@@ -361,13 +361,14 @@ export default function Home() {
   const [figmaData, setFigmaData] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [figmaUrl, setFigmaUrl] = useState("");
-  const [figmaToken, setFigmaToken] = useState("");
   const [step, setStep] = useState(1);
   const [selectedFrames, setSelectedFrames] = useState([]);
   const [outputType, setOutputType] = useState("both");
   const [frames, setFrames] = useState([]);
   const [generatedFiles, setGeneratedFiles] = useState({});
   const { toast } = useToast();
+
+  const FIGMA_ACCESS_TOKEN = "figd_zGkgrgerxnW83CDNpWsRwKc_uM53RqY6owtA1w7t";
 
   const extractFileKey = (url) => {
     const regex = /figma\.com\/(file|design)\/([a-zA-Z0-9]+)/;
@@ -376,28 +377,18 @@ export default function Home() {
   };
 
   const fetchFigmaFile = useCallback(
-    async (fileKey, accessToken) => {
+    async (fileKey) => {
       setIsProcessing(true);
       setFigmaData(null);
       setFrames([]);
       setSelectedFrames([]);
-
-      if (!accessToken) {
-        toast({
-          title: "Missing Token",
-          description: "Please enter your Figma Personal Access Token.",
-          variant: "destructive",
-        });
-        setIsProcessing(false);
-        return;
-      }
 
       try {
         const metaResponse = await fetch(
           `https://api.figma.com/v1/files/${fileKey}`,
           {
             headers: {
-              "X-Figma-Token": accessToken,
+              "X-Figma-Token": FIGMA_ACCESS_TOKEN,
             },
           }
         );
@@ -413,7 +404,7 @@ export default function Home() {
           `https://api.figma.com/v1/files/${fileKey}?geometry=paths`,
           {
             headers: {
-              "X-Figma-Token": accessToken,
+              "X-Figma-Token": FIGMA_ACCESS_TOKEN,
             },
           }
         );
@@ -481,15 +472,7 @@ export default function Home() {
       });
       return;
     }
-    if (!figmaToken.trim()) {
-      toast({
-        title: "Missing Figma Token",
-        description: "Please enter your Figma Personal Access Token.",
-        variant: "destructive",
-      });
-      return;
-    }
-    fetchFigmaFile(fileKey, figmaToken.trim());
+    fetchFigmaFile(fileKey);
   };
 
   const extractFrames = (documentNode) => {
@@ -732,11 +715,10 @@ export default function Home() {
 
       if (
         (outputType === "html" || outputType === "both") &&
-        figmaUrl &&
-        figmaToken
+        figmaUrl
       ) {
         const fileKey = extractFileKey(figmaUrl);
-        const accessToken = figmaToken.trim();
+        const accessToken = FIGMA_ACCESS_TOKEN;
 
         if (fileKey && accessToken) {
           const selectedFrameNodes = frames.filter((frame) =>
@@ -849,7 +831,7 @@ export default function Home() {
 
             <Button
               onClick={handleProcessClick}
-              disabled={!figmaUrl || !figmaToken || isProcessing}
+              disabled={!figmaUrl || isProcessing}
               className="w-full sm:w-auto"
             >
               {isProcessing ? "Processing..." : "Submit"}
