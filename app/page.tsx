@@ -341,7 +341,7 @@ export default function Home() {
   const [generatedFiles, setGeneratedFiles] = useState({})
   const { toast } = useToast()
 
-  const FIGMA_ACCESS_TOKEN = 'figd_zGkgrgerxnW83CDNpWsRwKc_uM53RqY6owtA1w7t'
+  const FIGMA_ACCESS_TOKEN = process.env.NEXT_PUBLIC_FIGMA_ACCESS_TOKEN;
 
   const extractFileKey = (url) => {
     const regex = /figma\.com\/(file|design)\/([a-zA-Z0-9]+)/
