@@ -11,351 +11,323 @@ import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 import { useToast } from '@/hooks/use-toast'
 import FeatureCard from '@/components/FeatureCard'
+import { downloadImages } from '@/lib/utils'
+import Navbar from '@/components/Navbar'
+import Footer from '@/components/Footer'
+import Main from '@/components/Main'
+import Step1 from '@/components/Step1'
+import Step2 from '@/components/Step2'
+import Step3 from '@/components/Step3'
 
 const toCSSUnit = (value) => {
   if (value === undefined || value === null) return '0px'
   return `${value}px`
 }
 
+function rgbaFromColor(color, opacity = 1) {
+  const r = Math.round(color.r * 255)
+  const g = Math.round(color.g * 255)
+  const b = Math.round(color.b * 255)
+  const a = opacity ?? 1
+  return `rgba(${r}, ${g}, ${b}, ${a})`
+}
+
 const generateHtmlFromNodes = (nodes) => {
   return nodes
     .map((node) => {
       let element = ''
-      const baseClass = `${node.type.toLowerCase()}`
+      const baseClass = `${node.type.toLowerCase()}-${node.id.replace(
+        /:/g,
+        '-'
+      )}`
       const uniqueClass = `${baseClass}-${node.id.split(':')[0]}`
+      const className = `${baseClass} ${uniqueClass}`
 
       switch (node.type) {
-        case 'FRAME':
-        case 'GROUP':
         case 'COMPONENT':
-          // Check if this is the login form container
-          if (
-            node.name.toLowerCase().includes('login') ||
-            node.name.toLowerCase().includes('form')
-          ) {
-            element = `<div class="${baseClass} ${uniqueClass} login-form">
-              ${node.children ? generateHtmlFromNodes(node.children) : ''}
-            </div>`
-          } else {
-            element = `<div class="${baseClass} ${uniqueClass}">
-              ${node.children ? generateHtmlFromNodes(node.children) : ''}
-            </div>`
-          }
-          break
-        case 'TEXT':
-          // Handle specific text elements (e.g., heading, labels, links)
-          if (
-            node.characters.toLowerCase().includes('login') &&
-            node.style?.fontSize >= 20
-          ) {
-            element = `<h2 class="${baseClass} ${uniqueClass}">${
-              node.characters || ''
-            }</h2>`
-          } else if (
-            node.characters.toLowerCase().includes('email') ||
-            node.characters.toLowerCase().includes('password')
-          ) {
-            // Check if this is a label for an input field
-            const hasInputSibling = node.parent?.children?.some(
-              (child) =>
-                child.type === 'RECTANGLE' &&
-                (child.name.toLowerCase().includes('email') ||
-                  child.name.toLowerCase().includes('password'))
+        case 'GROUP':
+        case 'FRAME': {
+          const isTrivialWrapper = (node) => {
+            return (
+              ['TEXT', 'RECTANGLE', 'ELLIPSE', 'IMAGE'].includes(node.type) ||
+              (node.type === 'GROUP' && !node.children?.length)
             )
-            if (hasInputSibling) {
-              element = `<label class="${baseClass} ${uniqueClass}">${
-                node.characters || ''
-              }</label>`
+          }
+
+          const sortedChildren = node.children
+            ? [...node.children].sort((a, b) => {
+                const ay = a.absoluteBoundingBox?.y || 0
+                const by = b.absoluteBoundingBox?.y || 0
+                return ay - by
+              })
+            : []
+
+          const onlyChild =
+            sortedChildren.length === 1 ? sortedChildren[0] : null
+          const isInputChild =
+            onlyChild?.type === 'TEXT' &&
+            onlyChild.characters?.toLowerCase().includes('enter')
+
+          if (onlyChild && isInputChild) {
+            element = generateHtmlFromNodes(sortedChildren)
+          } else {
+            element = `<div class="${className}">
+            ${generateHtmlFromNodes(sortedChildren)}
+            </div>`
+          }
+
+          break
+        }
+
+        case 'TEXT': {
+          const text = node.characters?.toLowerCase() || ''
+
+          if (text.includes('remember')) {
+            element = `<label class="${className}"><input type="checkbox" /> ${node.characters}</label>`
+          }
+
+          const isPlaceholder =
+            text.includes('enter email') || text.includes('enter password')
+
+          const isLabel =
+            text.includes('email') ||
+            text.includes('password') ||
+            text.includes('address')
+
+          if (isPlaceholder) {
+            if (text.includes('email')) {
+              element = `<input type="email" class="${className}" placeholder="${node.characters}" />`
+            } else if (text.includes('password')) {
+              element = `<input type="password" class="${className}" placeholder="${node.characters}" />`
             } else {
-              element = `<p class="${baseClass} ${uniqueClass}">${
-                node.characters || ''
-              }</p>`
+              element = `<input type="text" class="${className}" placeholder="${node.characters}" />`
             }
-          } else if (node.characters.toLowerCase().includes('forgot')) {
-            element = `<a href="#" class="${baseClass} ${uniqueClass}">${
-              node.characters || ''
-            }</a>`
-          } else if (node.characters.toLowerCase().includes('remember')) {
-            element = `<label class="${baseClass} ${uniqueClass}">${
-              node.characters || ''
-            }</label>`
+          } else if (text.includes('forgot')) {
+            element = `<a href="#" class="${className}">${node.characters}</a>`
+          } else if (text.includes('remember')) {
+            element = `<label class="${className}">${node.characters}</label>`
+          } else if (isLabel) {
+            element = `<label class="${className}">${node.characters}</label>`
           } else {
-            element = `<p class="${baseClass} ${uniqueClass}">${
-              node.characters || ''
-            }</p>`
+            element = `<p class="${className}">${node.characters}</p>`
+          }
+
+          break
+        }
+
+        case 'RECTANGLE': {
+          const name = node.name?.toLowerCase() || ''
+          const isEmail = name.includes('email')
+          const isPassword = name.includes('password')
+          const isButton =
+            name.includes('login') ||
+            node.children?.some((c) => c.characters?.toLowerCase() === 'login')
+
+          if (isEmail) {
+            element = `<input type="email" class="${className}" placeholder="Enter email address" />`
+          } else if (isPassword) {
+            element = `<input type="password" class="${className}" placeholder="Enter password" />`
+          } else if (isButton) {
+            const buttonText =
+              node.children?.find((c) => c.type === 'TEXT')?.characters ||
+              'Button'
+            element = `<button class="${className}">${buttonText}</button>`
+          } else {
+            element = `<div class="${className}"></div>`
           }
           break
-        case 'RECTANGLE':
-        case 'ELLIPSE':
-          // Handle input fields, buttons, and checkboxes
-          if (
-            node.name.toLowerCase().includes('email') ||
-            node.characters?.toLowerCase().includes('email')
-          ) {
-            element = `<input type="email" class="${baseClass} ${uniqueClass}" placeholder="Enter email address" />`
-          } else if (
-            node.name.toLowerCase().includes('password') ||
-            node.characters?.toLowerCase().includes('password')
-          ) {
-            element = `<input type="password" class="${baseClass} ${uniqueClass}" placeholder="Enter password" />`
-          } else if (
-            node.name.toLowerCase().includes('login') &&
-            node.name.toLowerCase().includes('button')
-          ) {
-            element = `<button class="${baseClass} ${uniqueClass}">Login</button>`
-          } else if (node.name.toLowerCase().includes('checkbox')) {
-            element = `<input type="checkbox" class="${baseClass} ${uniqueClass}" />`
+        }
+
+        case 'ELLIPSE': {
+          if (node.name.toLowerCase().includes('checkbox')) {
+            element = `<input type="checkbox" class="${className}" />`
           } else {
-            element = `<div class="${baseClass} ${uniqueClass}"></div>`
+            element = `<div class="${className}"></div>`
           }
           break
+        }
+
         case 'IMAGE':
           element = `<img src="images/${
             node.id.split(':')[0]
-          }.png" class="${baseClass} ${uniqueClass}" alt="${
-            node.name || 'Figma Image'
-          }" />`
+          }.png" class="${className}" alt="${node.name || 'Figma Image'}" />`
           break
+
         case 'VECTOR':
         case 'BOOLEAN_OPERATION':
-          // Skip vector and boolean operation nodes (e.g., icons) for now, or handle as needed
           element = ''
           break
+
         default:
           console.warn(`Unhandled Figma node type: ${node.type}`)
           element = node.children ? generateHtmlFromNodes(node.children) : ''
       }
+
       return element
     })
     .join('\n')
 }
 
 const generateCssFromStyles = (node) => {
-  if (!node || !node.type || !node.id.split(':')[0]) {
-    return ''
-  }
+  if (!node || !node.id || !node.type) return ''
 
   const styles = []
+  const baseClass = `${node.type.toLowerCase()}-${node.id.replace(/:/g, '-')}`
   const cssRules = []
 
-  const baseClass = `${node.type.toLowerCase()}-${node.id.split(':')[0]}`
-
-  // Handle dimensions (but avoid absolute positioning for layout)
-  if (node.absoluteBoundingBox) {
+  if (
+    node.absoluteBoundingBox &&
+    node.absoluteBoundingBox.width < 1500 &&
+    node.absoluteBoundingBox.height < 1000
+  ) {
     const { width, height } = node.absoluteBoundingBox
-    cssRules.push(`width: ${toCSSUnit(width)}`)
-    cssRules.push(`height: ${toCSSUnit(height)}`)
-    cssRules.push(`box-sizing: border-box`)
+    cssRules.push(`width: ${width}px`)
+    cssRules.push(`height: ${height}px`)
   }
 
-  // Handle background and fills
-  if (node.fills && Array.isArray(node.fills) && node.fills.length > 0) {
-    const visibleFills = node.fills.filter((fill) => fill.visible !== false)
-    if (visibleFills.length > 0) {
-      const fill = visibleFills[0]
-      if (fill.type === 'SOLID' && fill.color) {
-        const { r, g, b } = fill.color
-        const alpha =
-          fill.opacity !== undefined
-            ? fill.opacity
-            : fill.color.a !== undefined
-            ? fill.color.a
-            : 1
-        cssRules.push(
-          `background-color: rgba(${Math.round(r * 255)}, ${Math.round(
-            g * 255
-          )}, ${Math.round(b * 255)}, ${alpha.toFixed(2)})`
-        )
-      }
-    }
-  }
-
-  // Handle text styles
-  if (node.type === 'TEXT' && node.style) {
-    if (node.style.fontFamily)
-      cssRules.push(`font-family: "${node.style.fontFamily}"`)
-    if (node.style.fontSize)
-      cssRules.push(`font-size: ${node.style.fontSize}px`)
-    if (node.style.fontWeight)
-      cssRules.push(`font-weight: ${node.style.fontWeight}`)
-    if (node.style.letterSpacing)
-      cssRules.push(`letter-spacing: ${node.style.letterSpacing}px`)
-    if (node.style.lineHeightPx) {
-      cssRules.push(`line-height: ${node.style.lineHeightPx}px`)
-    }
-    if (node.style.textAlignHorizontal) {
-      cssRules.push(
-        `text-align: ${node.style.textAlignHorizontal.toLowerCase()}`
-      )
-    }
-    if (
-      node.style.fills &&
-      node.style.fills.length > 0 &&
-      node.style.fills[0].type === 'SOLID'
-    ) {
-      const fill = node.style.fills[0]
-      const { r, g, b } = fill.color
-      const alpha =
-        fill.opacity !== undefined
-          ? fill.opacity
-          : fill.color.a !== undefined
-          ? fill.color.a
-          : 1
-      cssRules.push(
-        `color: rgba(${Math.round(r * 255)}, ${Math.round(
-          g * 255
-        )}, ${Math.round(b * 255)}, ${alpha.toFixed(2)})`
-      )
-    }
-  }
-
-  // Handle borders
-  if (node.strokes && node.strokes.length > 0 && node.strokeWeight) {
-    const stroke = node.strokes[0]
-    if (stroke.type === 'SOLID' && stroke.color) {
-      const { r, g, b } = stroke.color
-      const alpha =
-        stroke.opacity !== undefined
-          ? stroke.opacity
-          : stroke.color.a !== undefined
-          ? stroke.color.a
-          : 1
-      cssRules.push(
-        `border: ${node.strokeWeight}px solid rgba(${Math.round(
-          r * 255
-        )}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${alpha.toFixed(
-          2
-        )})`
-      )
-    }
-  }
-
-  // Handle corner radius
-  if (node.cornerRadius) {
-    if (typeof node.cornerRadius === 'number' && node.cornerRadius > 0) {
-      cssRules.push(`border-radius: ${node.cornerRadius}px`)
-    }
-  }
-
-  // Handle shadows (effects)
-  if (node.effects && node.effects.length > 0) {
-    const shadowEffect = node.effects.find(
-      (effect) => effect.type === 'DROP_SHADOW'
-    )
-    if (shadowEffect) {
-      const { r, g, b, a } = shadowEffect.color
-      const { offset, radius } = shadowEffect
-      cssRules.push(
-        `box-shadow: ${offset.x}px ${offset.y}px ${radius}px rgba(${Math.round(
-          r * 255
-        )}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${a})`
-      )
-    }
-  }
-
-  // Add specific styles for the login form
   if (
     node.name.toLowerCase().includes('login') ||
     node.name.toLowerCase().includes('form')
   ) {
-    cssRules.length = 0 // Clear previous rules to avoid conflicts
-    cssRules.push(`display: flex`)
-    cssRules.push(`flex-direction: column`)
-    cssRules.push(`align-items: center`)
-    cssRules.push(`padding: 20px`)
-    cssRules.push(`background-color: white`)
-    cssRules.push(`border-radius: 10px`)
-    cssRules.push(`box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1)`)
-    cssRules.push(`width: 350px`)
-    cssRules.push(`margin: 0 auto`)
+    cssRules.push('display: flex')
+    cssRules.push('flex-direction: column')
+    cssRules.push('align-items: stretch')
+    cssRules.push('gap: 16px')
   }
 
-  // Add styles for inputs
-  if (
-    node.name.toLowerCase().includes('email') ||
-    node.name.toLowerCase().includes('password') ||
-    node.characters?.toLowerCase().includes('email') ||
-    node.characters?.toLowerCase().includes('password')
-  ) {
-    if (node.type === 'RECTANGLE' || node.type === 'ELLIPSE') {
-      cssRules.length = 0 // Clear previous rules
-      cssRules.push(`padding: 10px`)
-      cssRules.push(`margin-bottom: 15px`)
-      cssRules.push(`border: 1px solid #ccc`)
-      cssRules.push(`border-radius: 5px`)
-      cssRules.push(`width: 100%`)
-      cssRules.push(`box-sizing: border-box`)
+  if (node.name.toLowerCase().includes('checkbox')) {
+    cssRules.push('display: inline-block')
+    cssRules.push('margin-right: 8px')
+  }
+
+  if (node.type !== 'TEXT') {
+    const fill = node.fills?.[0]
+    if (fill && fill.type === 'SOLID' && fill.color) {
+      cssRules.push(
+        `background-color: ${rgbaFromColor(
+          fill.color,
+          fill.opacity ?? fill.color.a ?? 1
+        )}`
+      )
     }
   }
 
-  // Add styles for the button
+  if (node.strokes?.length > 0 && node.strokeWeight) {
+    const stroke = node.strokes[0]
+    if (stroke.type === 'SOLID') {
+      cssRules.push(
+        `border: ${node.strokeWeight}px solid ${rgbaFromColor(
+          stroke.color,
+          stroke.opacity ?? stroke.color.a ?? 1
+        )}`
+      )
+    }
+  }
+
+  // Corner radius
+  if (typeof node.cornerRadius === 'number') {
+    cssRules.push(`border-radius: ${node.cornerRadius}px`)
+  }
+
+  // Text styles
+  if (node.type === 'TEXT' && node.style) {
+    const s = node.style
+    if (s.fontFamily) cssRules.push(`font-family: "${s.fontFamily}"`)
+    if (s.fontSize) cssRules.push(`font-size: ${s.fontSize}px`)
+    if (s.fontWeight) cssRules.push(`font-weight: ${s.fontWeight}`)
+    if (s.letterSpacing) cssRules.push(`letter-spacing: ${s.letterSpacing}px`)
+    if (s.lineHeightPx) cssRules.push(`line-height: ${s.lineHeightPx}px`)
+    if (s.textAlignHorizontal)
+      cssRules.push(`text-align: ${s.textAlignHorizontal.toLowerCase()}`)
+    if (s.fills?.[0]?.type === 'SOLID') {
+      cssRules.push(
+        `color: ${rgbaFromColor(s.fills[0].color, s.fills[0].opacity ?? 1)}`
+      )
+    }
+  }
+
   if (
-    node.name.toLowerCase().includes('login') &&
-    node.name.toLowerCase().includes('button')
+    node.type === 'RECTANGLE' &&
+    (node.name.toLowerCase().includes('email') ||
+      node.name.toLowerCase().includes('password'))
   ) {
-    cssRules.length = 0 // Clear previous rules
-    cssRules.push(`background-color: #1e3a8a`)
-    cssRules.push(`color: white`)
-    cssRules.push(`padding: 10px 20px`)
-    cssRules.push(`border: none`)
-    cssRules.push(`border-radius: 25px`)
-    cssRules.push(`cursor: pointer`)
-    cssRules.push(`width: 100%`)
-    cssRules.push(`font-weight: 600`)
+    cssRules.push('padding: 8px 12px')
+    cssRules.push('border: 1px solid #ccc')
+    cssRules.push('border-radius: 6px')
+    cssRules.push('font-size: 14px')
+    cssRules.push('width: 100%')
   }
 
-  // Add styles for the logo
-  if (node.type === 'IMAGE') {
-    cssRules.length = 0 // Clear previous rules
-    cssRules.push(`margin-bottom: 20px`)
-    cssRules.push(`display: block`)
-    cssRules.push(`margin-left: auto`)
-    cssRules.push(`margin-right: auto`)
-  }
-
-  // Add styles for the checkbox
-  if (node.name.toLowerCase().includes('checkbox')) {
-    cssRules.length = 0 // Clear previous rules
-    cssRules.push(`margin-right: 10px`)
-  }
-
-  // Add styles for the "Forgot Password?" link
   if (
-    node.name.toLowerCase().includes('forgot') ||
+    node.name.toLowerCase().includes('button') ||
+    node.children?.some((c) => c.characters?.toLowerCase() === 'login')
+  ) {
+    cssRules.push('padding: 10px 20px')
+    cssRules.push('color: white')
+    cssRules.push('font-size: 14px')
+    cssRules.push('font-weight: 600')
+    cssRules.push('border: none')
+    cssRules.push('border-radius: 50px') // already coming from Figma
+    cssRules.push('background-color: #003966') // fallback if no fill
+  }
+
+  if (
+    node.type === 'TEXT' &&
     node.characters?.toLowerCase().includes('forgot')
   ) {
-    cssRules.length = 0 // Clear previous rules
-    cssRules.push(`color: #1e90ff`)
-    cssRules.push(`text-decoration: none`)
-    cssRules.push(`margin-top: 10px`)
+    cssRules.push('font-size: 14px')
+    cssRules.push('font-weight: 600')
+    cssRules.push('text-decoration: none')
+    cssRules.push('color: #007BFF') // or extract from fills
   }
 
-  // Generate CSS for the current node
+  if (
+    node.type === 'TEXT' &&
+    node.characters?.toLowerCase().includes('remember')
+  ) {
+    cssRules.push('display: flex')
+    cssRules.push('align-items: center')
+    cssRules.push('gap: 6px')
+    cssRules.push('font-size: 12px')
+  }
+
+  // Drop shadow
+  const shadow = node.effects?.find((e) => e.type === 'DROP_SHADOW')
+  if (shadow) {
+    const { offset, radius, color } = shadow
+    cssRules.push(
+      `box-shadow: ${offset.x}px ${offset.y}px ${radius}px ${rgbaFromColor(
+        color,
+        color.a ?? 1
+      )}`
+    )
+  }
+
+  // Centering logic for buttons
+  if (
+    node.name?.toLowerCase().includes('button') ||
+    node.children?.some((c) => c.characters?.toLowerCase() === 'login')
+  ) {
+    cssRules.push('display: flex')
+    cssRules.push('justify-content: center')
+    cssRules.push('align-items: center')
+    cssRules.push('cursor: pointer')
+  }
+
   if (cssRules.length > 0) {
     styles.push(`.${baseClass} { ${cssRules.join('; ')} }`)
   }
 
-  // Recursively generate CSS for children
-  if (node.children && Array.isArray(node.children)) {
-    node.children.forEach((child) => {
-      styles.push(generateCssFromStyles(child))
-    })
+  if (
+    node.children?.length &&
+    ['FRAME', 'GROUP', 'COMPONENT'].includes(node.type)
+  ) {
+    cssRules.push('display: flex')
+    cssRules.push('flex-direction: column')
+    cssRules.push('gap: 12px')
   }
 
-  // Add global styles for the frame
-  if (node.type === 'FRAME') {
-    styles.push(`
-      .frame {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        min-height: 100vh;
-        background-color: #f6f6f6;
-      }
-    `)
-  }
-
-  return styles.filter(Boolean).join('\n')
+  return styles.join('\n')
 }
 
 export default function Home() {
@@ -597,91 +569,6 @@ export default function Home() {
     return { html: fullHtml, css: fullCss }
   }
 
-  const downloadImages = async (nodesToProcess, fileKey, accessToken) => {
-    const imageMap = new Map()
-    const imageNodeIds = []
-
-    const findImageNodes = (node) => {
-      if (node.type === 'IMAGE' && node.id.split(':')[0]) {
-        imageNodeIds.push(node.id.split(':')[0])
-      }
-      if (node.children && Array.isArray(node.children)) {
-        node.children.forEach(findImageNodes)
-      }
-    }
-
-    nodesToProcess.forEach(findImageNodes)
-
-    if (imageNodeIds.length === 0) {
-      return imageMap
-    }
-
-    try {
-      const idsString = imageNodeIds.join(',')
-      const response = await fetch(
-        `https://api.figma.com/v1/images/${fileKey}?ids=${idsString}&format=png`,
-        {
-          headers: {
-            'X-Figma-Token': accessToken,
-          },
-        }
-      )
-
-      if (!response.ok) {
-        throw new Error(`Failed to get image URLs (Status: ${response.status})`)
-      }
-
-      const data = await response.json()
-
-      if (data.err) {
-        throw new Error(`Figma API error getting image URLs: ${data.err}`)
-      }
-
-      if (!data.images || Object.keys(data.images).length === 0) {
-        console.warn('Figma API returned no image URLs for the requested IDs.')
-        return imageMap
-      }
-
-      const downloadPromises = Object.entries(data.images).map(
-        async ([nodeId, imageUrl]) => {
-          if (!imageUrl) {
-            console.warn(`No URL returned for image node ${nodeId}`)
-            return
-          }
-          try {
-            const imageResponse = await fetch(imageUrl)
-            if (!imageResponse.ok) {
-              throw new Error(
-                `Failed to download image ${nodeId} (Status: ${imageResponse.status})`
-              )
-            }
-            const blob = await imageResponse.blob()
-            imageMap.set(`${nodeId}.png`, blob)
-          } catch (imgError) {
-            console.error(
-              `Failed to download or process image ${nodeId} from ${imageUrl}:`,
-              imgError
-            )
-          }
-        }
-      )
-
-      await Promise.all(downloadPromises)
-    } catch (error) {
-      console.error('Failed to download images:', error)
-      toast({
-        title: 'Image Download Failed',
-        description:
-          error instanceof Error
-            ? error.message
-            : 'Could not download images from Figma.',
-        variant: 'destructive',
-      })
-    }
-
-    return imageMap
-  }
-
   const handleDownload = async () => {
     if (!figmaData || !figmaData.document) {
       toast({
@@ -773,7 +660,7 @@ export default function Home() {
       saveAs(zipContent, `${safeFilename}.zip`)
 
       toast({
-        title: 'Download Ready!',
+        title: 'Downloaded',
         description: 'Your code has been generated and zipped.',
       })
     } catch (error) {
@@ -795,139 +682,36 @@ export default function Home() {
     switch (step) {
       case 1:
         return (
-          <div className="flex flex-col items-center justify-center space-y-4 w-full max-w-lg mx-auto">
-            <div className="w-full space-y-2">
-              <Label htmlFor="figmaUrl">Figma File URL</Label>
-              <Input
-                id="figmaUrl"
-                type="text"
-                placeholder="Enter Figma file URL (e.g., https://www.figma.com/file/...)"
-                value={figmaUrl}
-                onChange={(e) => setFigmaUrl(e.target.value)}
-                className="w-full"
-                disabled={isProcessing}
-              />
-            </div>
-            <Button
-              onClick={handleProcessClick}
-              disabled={!figmaUrl || isProcessing}
-              className="w-full sm:w-auto"
-            >
-              {isProcessing ? 'Processing...' : 'Submit'}
-            </Button>
-          </div>
+          <Step1
+            figmaUrl={figmaUrl}
+            setFigmaUrl={setFigmaUrl}
+            isProcessing={isProcessing}
+            handleProcessClick={handleProcessClick}
+          />
         )
-
       case 2:
         return (
-          <div className="mt-8 w-full">
-            <h2 className="text-2xl font-bold mb-4 text-center sm:text-left">
-              Select Frames or Components
-            </h2>
-            <p className="text-muted-foreground mb-6 text-center sm:text-left">
-              Choose the items you want to convert to code.
-            </p>
-            {frames.length === 0 && !isProcessing && (
-              <p className="text-center text-red-500">
-                No frames or components found in the loaded file.
-              </p>
-            )}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
-              {frames.map((frame) => (
-                <Card
-                  key={frame.id}
-                  className={`p-4 cursor-pointer transition-all border-2 ${
-                    selectedFrames.includes(frame.id)
-                      ? 'border-primary ring-2 ring-primary ring-offset-2'
-                      : 'border-border hover:border-muted-foreground/50'
-                  }`}
-                  onClick={() => handleFrameSelection(frame.id)}
-                >
-                  <div className="flex items-center space-x-3">
-                    <Checkbox
-                      id={`frame-${frame.id}`}
-                      checked={selectedFrames.includes(frame.id)}
-                      onCheckedChange={() => handleFrameSelection(frame.id)}
-                      aria-labelledby={`label-${frame.id}`}
-                    />
-                    <Label
-                      htmlFor={`frame-${frame.id}`}
-                      id={`label-${frame.id}`}
-                      className="font-medium truncate cursor-pointer"
-                    >
-                      {frame.name || `Untitled ${frame.type}`}
-                    </Label>
-                  </div>
-                </Card>
-              ))}
-            </div>
-            <div className="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-              <Button
-                onClick={() => {
-                  setStep(1)
-                  setFigmaData(null)
-                  setFrames([])
-                  setSelectedFrames([])
-                }}
-                variant="outline"
-              >
-                Back to Input
-              </Button>
-              <Button
-                onClick={handleProceedToOutput}
-                disabled={selectedFrames.length === 0 || isProcessing}
-              >
-                Continue ({selectedFrames.length} selected)
-              </Button>
-            </div>
-          </div>
+          <Step2
+            frames={frames}
+            selectedFrames={selectedFrames}
+            setSelectedFrames={setSelectedFrames}
+            setStep={setStep}
+            handleFrameSelection={handleFrameSelection}
+            handleProceedToOutput={handleProceedToOutput}
+            isProcessing={isProcessing}
+          />
         )
-
       case 3:
         return (
-          <div className="mt-8 w-full max-w-2xl mx-auto">
-            <h2 className="text-2xl font-bold mb-6 text-center">
-              Download Options
-            </h2>
-            <Tabs
-              defaultValue={outputType}
-              onValueChange={(value) => setOutputType(value)}
-            >
-              <TabsList className="grid w-full grid-cols-3 mb-6">
-                <TabsTrigger value="html">HTML Only</TabsTrigger>
-                <TabsTrigger value="css">CSS Only</TabsTrigger>
-                <TabsTrigger value="both">HTML & CSS</TabsTrigger>
-              </TabsList>
-            </Tabs>
-            <div className="mt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
-              <Button
-                onClick={() => setStep(2)}
-                variant="outline"
-                disabled={isProcessing}
-              >
-                Back to Selection
-              </Button>
-              <Button onClick={handleDownload} disabled={isProcessing}>
-                {isProcessing ? 'Generating ZIP...' : 'Download ZIP'}
-              </Button>
-            </div>
-            <section>
-              <div className="mt-6">
-                <h3 className="text-lg font-semibold mb-2">HTML Preview</h3>
-                <pre className="bg-muted p-4 rounded-md text-xs overflow-auto max-h-60">
-                  <code>{generatedFiles.html}</code>
-                </pre>
-              </div>
-              <div className="mt-4">
-                <h3 className="text-lg font-semibold mb-2">CSS Preview</h3>
-                <pre className="bg-muted p-4 rounded-md text-xs overflow-auto max-h-60">
-                  <code>{generatedFiles.css}</code>
-                </pre>
-              </div>
-            </section>
-          </div>
+          <Step3
+            outputType={outputType}
+            setOutputType={setOutputType}
+            setStep={setStep}
+            isProcessing={isProcessing}
+            handleDownload={handleDownload}
+            generatedFiles={generatedFiles}
+          />
         )
-
       default:
         return null
     }
@@ -935,96 +719,16 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <nav className="border-b border-border sticky top-0 bg-background/95 backdrop-blur z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-center h-16 items-center">
-            <div className="flex items-center">
-              <Code className="h-8 w-8 text-primary" />
-              <span className="ml-2 text-xl font-bold">F2C</span>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {step === 1 && (
-          <div className="text-center mb-16">
-            <h1 className="text-4xl font-extrabold tracking-tight text-primary sm:text-5xl lg:text-6xl">
-              Transform Your Designs
-            </h1>
-            <p className="mt-6 text-lg leading-8 text-muted-foreground max-w-md mx-auto">
-              Enter a Figma file URL to load frames, then select frames and
-              export them as HTML & CSS code.
-            </p>
-          </div>
-        )}
-
-        <div className="mt-10">{renderStepContent()}</div>
-
-        {figmaData && (step === 1 || step === 2) && !isProcessing && (
-          <div className="mt-12 w-full max-w-md mx-auto">
-            <Card className="p-6 shadow-md">
-              <h3 className="text-lg font-semibold mb-4 border-b pb-2">
-                {figmaData.name}
-              </h3>
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <p>
-                  Last Modified:{' '}
-                  {new Date(figmaData.lastModified).toLocaleString()}
-                </p>
-                <p>Components: {figmaData.components}</p>
-                <p>Styles: {figmaData.styles}</p>
-                {figmaData.thumbnailUrl && (
-                  <img
-                    src={figmaData.thumbnailUrl}
-                    alt="Figma File Preview"
-                    className="mt-4 rounded-md w-full border border-border"
-                    onError={(e) => (e.currentTarget.style.display = 'none')}
-                  />
-                )}
-              </div>
-              {step === 1 && frames.length > 0 && (
-                <Button onClick={() => setStep(2)} className="w-full mt-4">
-                  Select Frames ({frames.length})
-                </Button>
-              )}
-            </Card>
-          </div>
-        )}
-
-        {step === 1 && (
-          <div className="mt-20">
-            <h2 className="text-center text-2xl font-semibold mb-8">
-              How it Works
-            </h2>
-            <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-              <FeatureCard
-                icon={<Download className="h-6 w-6 text-primary" />}
-                title="1. Enter URL & Submit"
-                description="Paste your Figma file URL and Access Token. Choose the frames or components you need."
-              />
-              <FeatureCard
-                icon={<Code className="h-6 w-6 text-primary" />}
-                title="2. Select Frame"
-                description="Get the frame based on your Figma design's properties and layout."
-              />
-              <FeatureCard
-                icon={<Eye className="h-6 w-6 text-primary" />}
-                title="3. Preview & Download"
-                description="Download a ZIP file with HTML, CSS, and images. Refine the code for production use."
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      <footer className="border-t mt-20 py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-muted-foreground">
-          Figma To Code Converter
-          <br />
-          <span className="text-xs">Copyright</span>
-        </div>
-      </footer>
+      <Navbar />
+      <Main
+        step={step}
+        setStep={setStep}
+        renderStepContent={renderStepContent}
+        figmaData={figmaData}
+        isProcessing={isProcessing}
+        frames={frames}
+      />
+      <Footer />
     </main>
   )
 }
