@@ -1,348 +1,349 @@
-"use client";
-import React, { useState, useCallback } from "react";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Code, Eye, Download } from "lucide-react";
-import JSZip from "jszip";
-import { saveAs } from "file-saver";
-import { useToast } from "@/hooks/use-toast";
+'use client'
+import React, { useState, useCallback } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Code, Eye, Download } from 'lucide-react'
+import JSZip from 'jszip'
+import { saveAs } from 'file-saver'
+import { useToast } from '@/hooks/use-toast'
+import FeatureCard from '@/components/FeatureCard'
 
 const toCSSUnit = (value) => {
-  if (value === undefined || value === null) return "0px";
-  return `${value}px`;
-};
+  if (value === undefined || value === null) return '0px'
+  return `${value}px`
+}
 
 const generateHtmlFromNodes = (nodes) => {
   return nodes
     .map((node) => {
-      let element = "";
-      const baseClass = `${node.type.toLowerCase()}`;
-      const uniqueClass = `${baseClass}-${node.id.split(":")[0]}`;
+      let element = ''
+      const baseClass = `${node.type.toLowerCase()}`
+      const uniqueClass = `${baseClass}-${node.id.split(':')[0]}`
 
       switch (node.type) {
-        case "FRAME":
-        case "GROUP":
-        case "COMPONENT":
+        case 'FRAME':
+        case 'GROUP':
+        case 'COMPONENT':
           // Check if this is the login form container
           if (
-            node.name.toLowerCase().includes("login") ||
-            node.name.toLowerCase().includes("form")
+            node.name.toLowerCase().includes('login') ||
+            node.name.toLowerCase().includes('form')
           ) {
             element = `<div class="${baseClass} ${uniqueClass} login-form">
-              ${node.children ? generateHtmlFromNodes(node.children) : ""}
-            </div>`;
+              ${node.children ? generateHtmlFromNodes(node.children) : ''}
+            </div>`
           } else {
             element = `<div class="${baseClass} ${uniqueClass}">
-              ${node.children ? generateHtmlFromNodes(node.children) : ""}
-            </div>`;
+              ${node.children ? generateHtmlFromNodes(node.children) : ''}
+            </div>`
           }
-          break;
-        case "TEXT":
+          break
+        case 'TEXT':
           // Handle specific text elements (e.g., heading, labels, links)
           if (
-            node.characters.toLowerCase().includes("login") &&
+            node.characters.toLowerCase().includes('login') &&
             node.style?.fontSize >= 20
           ) {
             element = `<h2 class="${baseClass} ${uniqueClass}">${
-              node.characters || ""
-            }</h2>`;
+              node.characters || ''
+            }</h2>`
           } else if (
-            node.characters.toLowerCase().includes("email") ||
-            node.characters.toLowerCase().includes("password")
+            node.characters.toLowerCase().includes('email') ||
+            node.characters.toLowerCase().includes('password')
           ) {
             // Check if this is a label for an input field
             const hasInputSibling = node.parent?.children?.some(
               (child) =>
-                child.type === "RECTANGLE" &&
-                (child.name.toLowerCase().includes("email") ||
-                  child.name.toLowerCase().includes("password"))
-            );
+                child.type === 'RECTANGLE' &&
+                (child.name.toLowerCase().includes('email') ||
+                  child.name.toLowerCase().includes('password'))
+            )
             if (hasInputSibling) {
               element = `<label class="${baseClass} ${uniqueClass}">${
-                node.characters || ""
-              }</label>`;
+                node.characters || ''
+              }</label>`
             } else {
               element = `<p class="${baseClass} ${uniqueClass}">${
-                node.characters || ""
-              }</p>`;
+                node.characters || ''
+              }</p>`
             }
-          } else if (node.characters.toLowerCase().includes("forgot")) {
+          } else if (node.characters.toLowerCase().includes('forgot')) {
             element = `<a href="#" class="${baseClass} ${uniqueClass}">${
-              node.characters || ""
-            }</a>`;
-          } else if (node.characters.toLowerCase().includes("remember")) {
+              node.characters || ''
+            }</a>`
+          } else if (node.characters.toLowerCase().includes('remember')) {
             element = `<label class="${baseClass} ${uniqueClass}">${
-              node.characters || ""
-            }</label>`;
+              node.characters || ''
+            }</label>`
           } else {
             element = `<p class="${baseClass} ${uniqueClass}">${
-              node.characters || ""
-            }</p>`;
+              node.characters || ''
+            }</p>`
           }
-          break;
-        case "RECTANGLE":
-        case "ELLIPSE":
+          break
+        case 'RECTANGLE':
+        case 'ELLIPSE':
           // Handle input fields, buttons, and checkboxes
           if (
-            node.name.toLowerCase().includes("email") ||
-            node.characters?.toLowerCase().includes("email")
+            node.name.toLowerCase().includes('email') ||
+            node.characters?.toLowerCase().includes('email')
           ) {
-            element = `<input type="email" class="${baseClass} ${uniqueClass}" placeholder="Enter email address" />`;
+            element = `<input type="email" class="${baseClass} ${uniqueClass}" placeholder="Enter email address" />`
           } else if (
-            node.name.toLowerCase().includes("password") ||
-            node.characters?.toLowerCase().includes("password")
+            node.name.toLowerCase().includes('password') ||
+            node.characters?.toLowerCase().includes('password')
           ) {
-            element = `<input type="password" class="${baseClass} ${uniqueClass}" placeholder="Enter password" />`;
+            element = `<input type="password" class="${baseClass} ${uniqueClass}" placeholder="Enter password" />`
           } else if (
-            node.name.toLowerCase().includes("login") &&
-            node.name.toLowerCase().includes("button")
+            node.name.toLowerCase().includes('login') &&
+            node.name.toLowerCase().includes('button')
           ) {
-            element = `<button class="${baseClass} ${uniqueClass}">Login</button>`;
-          } else if (node.name.toLowerCase().includes("checkbox")) {
-            element = `<input type="checkbox" class="${baseClass} ${uniqueClass}" />`;
+            element = `<button class="${baseClass} ${uniqueClass}">Login</button>`
+          } else if (node.name.toLowerCase().includes('checkbox')) {
+            element = `<input type="checkbox" class="${baseClass} ${uniqueClass}" />`
           } else {
-            element = `<div class="${baseClass} ${uniqueClass}"></div>`;
+            element = `<div class="${baseClass} ${uniqueClass}"></div>`
           }
-          break;
-        case "IMAGE":
+          break
+        case 'IMAGE':
           element = `<img src="images/${
-            node.id.split(":")[0]
+            node.id.split(':')[0]
           }.png" class="${baseClass} ${uniqueClass}" alt="${
-            node.name || "Figma Image"
-          }" />`;
-          break;
-        case "VECTOR":
-        case "BOOLEAN_OPERATION":
+            node.name || 'Figma Image'
+          }" />`
+          break
+        case 'VECTOR':
+        case 'BOOLEAN_OPERATION':
           // Skip vector and boolean operation nodes (e.g., icons) for now, or handle as needed
-          element = "";
-          break;
+          element = ''
+          break
         default:
-          console.warn(`Unhandled Figma node type: ${node.type}`);
-          element = node.children ? generateHtmlFromNodes(node.children) : "";
+          console.warn(`Unhandled Figma node type: ${node.type}`)
+          element = node.children ? generateHtmlFromNodes(node.children) : ''
       }
-      return element;
+      return element
     })
-    .join("\n");
-};
+    .join('\n')
+}
 
 const generateCssFromStyles = (node) => {
-  if (!node || !node.type || !node.id.split(":")[0]) {
-    return "";
+  if (!node || !node.type || !node.id.split(':')[0]) {
+    return ''
   }
 
-  const styles = [];
-  const cssRules = [];
+  const styles = []
+  const cssRules = []
 
-  const baseClass = `${node.type.toLowerCase()}-${node.id.split(":")[0]}`;
+  const baseClass = `${node.type.toLowerCase()}-${node.id.split(':')[0]}`
 
   // Handle dimensions (but avoid absolute positioning for layout)
   if (node.absoluteBoundingBox) {
-    const { width, height } = node.absoluteBoundingBox;
-    cssRules.push(`width: ${toCSSUnit(width)}`);
-    cssRules.push(`height: ${toCSSUnit(height)}`);
-    cssRules.push(`box-sizing: border-box`);
+    const { width, height } = node.absoluteBoundingBox
+    cssRules.push(`width: ${toCSSUnit(width)}`)
+    cssRules.push(`height: ${toCSSUnit(height)}`)
+    cssRules.push(`box-sizing: border-box`)
   }
 
   // Handle background and fills
   if (node.fills && Array.isArray(node.fills) && node.fills.length > 0) {
-    const visibleFills = node.fills.filter((fill) => fill.visible !== false);
+    const visibleFills = node.fills.filter((fill) => fill.visible !== false)
     if (visibleFills.length > 0) {
-      const fill = visibleFills[0];
-      if (fill.type === "SOLID" && fill.color) {
-        const { r, g, b } = fill.color;
+      const fill = visibleFills[0]
+      if (fill.type === 'SOLID' && fill.color) {
+        const { r, g, b } = fill.color
         const alpha =
           fill.opacity !== undefined
             ? fill.opacity
             : fill.color.a !== undefined
             ? fill.color.a
-            : 1;
+            : 1
         cssRules.push(
           `background-color: rgba(${Math.round(r * 255)}, ${Math.round(
             g * 255
           )}, ${Math.round(b * 255)}, ${alpha.toFixed(2)})`
-        );
+        )
       }
     }
   }
 
   // Handle text styles
-  if (node.type === "TEXT" && node.style) {
+  if (node.type === 'TEXT' && node.style) {
     if (node.style.fontFamily)
-      cssRules.push(`font-family: "${node.style.fontFamily}"`);
+      cssRules.push(`font-family: "${node.style.fontFamily}"`)
     if (node.style.fontSize)
-      cssRules.push(`font-size: ${node.style.fontSize}px`);
+      cssRules.push(`font-size: ${node.style.fontSize}px`)
     if (node.style.fontWeight)
-      cssRules.push(`font-weight: ${node.style.fontWeight}`);
+      cssRules.push(`font-weight: ${node.style.fontWeight}`)
     if (node.style.letterSpacing)
-      cssRules.push(`letter-spacing: ${node.style.letterSpacing}px`);
+      cssRules.push(`letter-spacing: ${node.style.letterSpacing}px`)
     if (node.style.lineHeightPx) {
-      cssRules.push(`line-height: ${node.style.lineHeightPx}px`);
+      cssRules.push(`line-height: ${node.style.lineHeightPx}px`)
     }
     if (node.style.textAlignHorizontal) {
       cssRules.push(
         `text-align: ${node.style.textAlignHorizontal.toLowerCase()}`
-      );
+      )
     }
     if (
       node.style.fills &&
       node.style.fills.length > 0 &&
-      node.style.fills[0].type === "SOLID"
+      node.style.fills[0].type === 'SOLID'
     ) {
-      const fill = node.style.fills[0];
-      const { r, g, b } = fill.color;
+      const fill = node.style.fills[0]
+      const { r, g, b } = fill.color
       const alpha =
         fill.opacity !== undefined
           ? fill.opacity
           : fill.color.a !== undefined
           ? fill.color.a
-          : 1;
+          : 1
       cssRules.push(
         `color: rgba(${Math.round(r * 255)}, ${Math.round(
           g * 255
         )}, ${Math.round(b * 255)}, ${alpha.toFixed(2)})`
-      );
+      )
     }
   }
 
   // Handle borders
   if (node.strokes && node.strokes.length > 0 && node.strokeWeight) {
-    const stroke = node.strokes[0];
-    if (stroke.type === "SOLID" && stroke.color) {
-      const { r, g, b } = stroke.color;
+    const stroke = node.strokes[0]
+    if (stroke.type === 'SOLID' && stroke.color) {
+      const { r, g, b } = stroke.color
       const alpha =
         stroke.opacity !== undefined
           ? stroke.opacity
           : stroke.color.a !== undefined
           ? stroke.color.a
-          : 1;
+          : 1
       cssRules.push(
         `border: ${node.strokeWeight}px solid rgba(${Math.round(
           r * 255
         )}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${alpha.toFixed(
           2
         )})`
-      );
+      )
     }
   }
 
   // Handle corner radius
   if (node.cornerRadius) {
-    if (typeof node.cornerRadius === "number" && node.cornerRadius > 0) {
-      cssRules.push(`border-radius: ${node.cornerRadius}px`);
+    if (typeof node.cornerRadius === 'number' && node.cornerRadius > 0) {
+      cssRules.push(`border-radius: ${node.cornerRadius}px`)
     }
   }
 
   // Handle shadows (effects)
   if (node.effects && node.effects.length > 0) {
     const shadowEffect = node.effects.find(
-      (effect) => effect.type === "DROP_SHADOW"
-    );
+      (effect) => effect.type === 'DROP_SHADOW'
+    )
     if (shadowEffect) {
-      const { r, g, b, a } = shadowEffect.color;
-      const { offset, radius } = shadowEffect;
+      const { r, g, b, a } = shadowEffect.color
+      const { offset, radius } = shadowEffect
       cssRules.push(
         `box-shadow: ${offset.x}px ${offset.y}px ${radius}px rgba(${Math.round(
           r * 255
         )}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${a})`
-      );
+      )
     }
   }
 
   // Add specific styles for the login form
   if (
-    node.name.toLowerCase().includes("login") ||
-    node.name.toLowerCase().includes("form")
+    node.name.toLowerCase().includes('login') ||
+    node.name.toLowerCase().includes('form')
   ) {
-    cssRules.length = 0; // Clear previous rules to avoid conflicts
-    cssRules.push(`display: flex`);
-    cssRules.push(`flex-direction: column`);
-    cssRules.push(`align-items: center`);
-    cssRules.push(`padding: 20px`);
-    cssRules.push(`background-color: white`);
-    cssRules.push(`border-radius: 10px`);
-    cssRules.push(`box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1)`);
-    cssRules.push(`width: 350px`);
-    cssRules.push(`margin: 0 auto`);
+    cssRules.length = 0 // Clear previous rules to avoid conflicts
+    cssRules.push(`display: flex`)
+    cssRules.push(`flex-direction: column`)
+    cssRules.push(`align-items: center`)
+    cssRules.push(`padding: 20px`)
+    cssRules.push(`background-color: white`)
+    cssRules.push(`border-radius: 10px`)
+    cssRules.push(`box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1)`)
+    cssRules.push(`width: 350px`)
+    cssRules.push(`margin: 0 auto`)
   }
 
   // Add styles for inputs
   if (
-    node.name.toLowerCase().includes("email") ||
-    node.name.toLowerCase().includes("password") ||
-    node.characters?.toLowerCase().includes("email") ||
-    node.characters?.toLowerCase().includes("password")
+    node.name.toLowerCase().includes('email') ||
+    node.name.toLowerCase().includes('password') ||
+    node.characters?.toLowerCase().includes('email') ||
+    node.characters?.toLowerCase().includes('password')
   ) {
-    if (node.type === "RECTANGLE" || node.type === "ELLIPSE") {
-      cssRules.length = 0; // Clear previous rules
-      cssRules.push(`padding: 10px`);
-      cssRules.push(`margin-bottom: 15px`);
-      cssRules.push(`border: 1px solid #ccc`);
-      cssRules.push(`border-radius: 5px`);
-      cssRules.push(`width: 100%`);
-      cssRules.push(`box-sizing: border-box`);
+    if (node.type === 'RECTANGLE' || node.type === 'ELLIPSE') {
+      cssRules.length = 0 // Clear previous rules
+      cssRules.push(`padding: 10px`)
+      cssRules.push(`margin-bottom: 15px`)
+      cssRules.push(`border: 1px solid #ccc`)
+      cssRules.push(`border-radius: 5px`)
+      cssRules.push(`width: 100%`)
+      cssRules.push(`box-sizing: border-box`)
     }
   }
 
   // Add styles for the button
   if (
-    node.name.toLowerCase().includes("login") &&
-    node.name.toLowerCase().includes("button")
+    node.name.toLowerCase().includes('login') &&
+    node.name.toLowerCase().includes('button')
   ) {
-    cssRules.length = 0; // Clear previous rules
-    cssRules.push(`background-color: #1e3a8a`);
-    cssRules.push(`color: white`);
-    cssRules.push(`padding: 10px 20px`);
-    cssRules.push(`border: none`);
-    cssRules.push(`border-radius: 25px`);
-    cssRules.push(`cursor: pointer`);
-    cssRules.push(`width: 100%`);
-    cssRules.push(`font-weight: 600`);
+    cssRules.length = 0 // Clear previous rules
+    cssRules.push(`background-color: #1e3a8a`)
+    cssRules.push(`color: white`)
+    cssRules.push(`padding: 10px 20px`)
+    cssRules.push(`border: none`)
+    cssRules.push(`border-radius: 25px`)
+    cssRules.push(`cursor: pointer`)
+    cssRules.push(`width: 100%`)
+    cssRules.push(`font-weight: 600`)
   }
 
   // Add styles for the logo
-  if (node.type === "IMAGE") {
-    cssRules.length = 0; // Clear previous rules
-    cssRules.push(`margin-bottom: 20px`);
-    cssRules.push(`display: block`);
-    cssRules.push(`margin-left: auto`);
-    cssRules.push(`margin-right: auto`);
+  if (node.type === 'IMAGE') {
+    cssRules.length = 0 // Clear previous rules
+    cssRules.push(`margin-bottom: 20px`)
+    cssRules.push(`display: block`)
+    cssRules.push(`margin-left: auto`)
+    cssRules.push(`margin-right: auto`)
   }
 
   // Add styles for the checkbox
-  if (node.name.toLowerCase().includes("checkbox")) {
-    cssRules.length = 0; // Clear previous rules
-    cssRules.push(`margin-right: 10px`);
+  if (node.name.toLowerCase().includes('checkbox')) {
+    cssRules.length = 0 // Clear previous rules
+    cssRules.push(`margin-right: 10px`)
   }
 
   // Add styles for the "Forgot Password?" link
   if (
-    node.name.toLowerCase().includes("forgot") ||
-    node.characters?.toLowerCase().includes("forgot")
+    node.name.toLowerCase().includes('forgot') ||
+    node.characters?.toLowerCase().includes('forgot')
   ) {
-    cssRules.length = 0; // Clear previous rules
-    cssRules.push(`color: #1e90ff`);
-    cssRules.push(`text-decoration: none`);
-    cssRules.push(`margin-top: 10px`);
+    cssRules.length = 0 // Clear previous rules
+    cssRules.push(`color: #1e90ff`)
+    cssRules.push(`text-decoration: none`)
+    cssRules.push(`margin-top: 10px`)
   }
 
   // Generate CSS for the current node
   if (cssRules.length > 0) {
-    styles.push(`.${baseClass} { ${cssRules.join("; ")} }`);
+    styles.push(`.${baseClass} { ${cssRules.join('; ')} }`)
   }
 
   // Recursively generate CSS for children
   if (node.children && Array.isArray(node.children)) {
     node.children.forEach((child) => {
-      styles.push(generateCssFromStyles(child));
-    });
+      styles.push(generateCssFromStyles(child))
+    })
   }
 
   // Add global styles for the frame
-  if (node.type === "FRAME") {
+  if (node.type === 'FRAME') {
     styles.push(`
       .frame {
         display: flex;
@@ -351,140 +352,140 @@ const generateCssFromStyles = (node) => {
         min-height: 100vh;
         background-color: #f6f6f6;
       }
-    `);
+    `)
   }
 
-  return styles.filter(Boolean).join("\n");
-};
+  return styles.filter(Boolean).join('\n')
+}
 
 export default function Home() {
-  const [figmaData, setFigmaData] = useState(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [figmaUrl, setFigmaUrl] = useState("");
-  const [step, setStep] = useState(1);
-  const [selectedFrames, setSelectedFrames] = useState([]);
-  const [outputType, setOutputType] = useState("both");
-  const [frames, setFrames] = useState([]);
-  const [generatedFiles, setGeneratedFiles] = useState({});
-  const { toast } = useToast();
+  const [figmaData, setFigmaData] = useState(null)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [figmaUrl, setFigmaUrl] = useState('')
+  const [step, setStep] = useState(1)
+  const [selectedFrames, setSelectedFrames] = useState([])
+  const [outputType, setOutputType] = useState('both')
+  const [frames, setFrames] = useState([])
+  const [generatedFiles, setGeneratedFiles] = useState({})
+  const { toast } = useToast()
 
-  const FIGMA_ACCESS_TOKEN = "figd_zGkgrgerxnW83CDNpWsRwKc_uM53RqY6owtA1w7t";
+  const FIGMA_ACCESS_TOKEN = 'figd_zGkgrgerxnW83CDNpWsRwKc_uM53RqY6owtA1w7t'
 
   const extractFileKey = (url) => {
-    const regex = /figma\.com\/(file|design)\/([a-zA-Z0-9]+)/;
-    const match = url.match(regex);
-    return match ? match[2] : null;
-  };
+    const regex = /figma\.com\/(file|design)\/([a-zA-Z0-9]+)/
+    const match = url.match(regex)
+    return match ? match[2] : null
+  }
 
   const fetchFigmaFile = useCallback(
     async (fileKey) => {
-      setIsProcessing(true);
-      setFigmaData(null);
-      setFrames([]);
-      setSelectedFrames([]);
+      setIsProcessing(true)
+      setFigmaData(null)
+      setFrames([])
+      setSelectedFrames([])
 
       try {
         const metaResponse = await fetch(
           `https://api.figma.com/v1/files/${fileKey}`,
           {
             headers: {
-              "X-Figma-Token": FIGMA_ACCESS_TOKEN,
+              'X-Figma-Token': FIGMA_ACCESS_TOKEN,
             },
           }
-        );
+        )
 
         if (!metaResponse.ok) {
           throw new Error(
             `Failed to fetch Figma file metadata (Status: ${metaResponse.status})`
-          );
+          )
         }
-        const metaData = await metaResponse.json();
+        const metaData = await metaResponse.json()
 
         const contentResponse = await fetch(
           `https://api.figma.com/v1/files/${fileKey}?geometry=paths`,
           {
             headers: {
-              "X-Figma-Token": FIGMA_ACCESS_TOKEN,
+              'X-Figma-Token': FIGMA_ACCESS_TOKEN,
             },
           }
-        );
+        )
 
         if (!contentResponse.ok) {
           throw new Error(
             `Failed to fetch Figma file content (Status: ${contentResponse.status})`
-          );
+          )
         }
-        const contentData = await contentResponse.json();
+        const contentData = await contentResponse.json()
 
         const combinedData = {
-          name: metaData.name || "Untitled Figma File",
+          name: metaData.name || 'Untitled Figma File',
           lastModified: metaData.lastModified || new Date().toISOString(),
           components: Object.keys(metaData.components || {}).length,
           styles: Object.keys(metaData.styles || {}).length,
           thumbnailUrl: metaData.thumbnailUrl,
           document: contentData.document,
-        };
+        }
 
-        setFigmaData(combinedData);
+        setFigmaData(combinedData)
 
-        const extracted = extractFrames(combinedData.document);
-        setFrames(extracted);
+        const extracted = extractFrames(combinedData.document)
+        setFrames(extracted)
 
         if (extracted.length > 0) {
-          setStep(2);
+          setStep(2)
           toast({
-            title: "Figma File Loaded",
-            description: `Found ${extracted.length} top-level frames/components.`,
-          });
+            title: 'Figma File Loaded',
+            description: `Found ${extracted.length} frames.`,
+          })
         } else {
           toast({
-            title: "No Frames Found",
+            title: 'No Frames Found',
             description:
-              "Could not find any top-level frames or components in this Figma file.",
-            variant: "destructive",
-          });
+              'Could not find any frames or components in this Figma file.',
+            variant: 'destructive',
+          })
         }
       } catch (error) {
-        console.error("Figma API Error:", error);
+        console.error('Figma API Error:', error)
         toast({
-          title: "Error Loading Figma File",
+          title: 'Error Loading Figma File',
           description:
             error instanceof Error
               ? error.message
-              : "An unexpected error occurred.",
-          variant: "destructive",
-        });
-        setStep(1);
+              : 'An unexpected error occurred.',
+          variant: 'destructive',
+        })
+        setStep(1)
       } finally {
-        setIsProcessing(false);
+        setIsProcessing(false)
       }
     },
     [toast]
-  );
+  )
 
   const handleProcessClick = () => {
-    const fileKey = extractFileKey(figmaUrl);
+    const fileKey = extractFileKey(figmaUrl)
     if (!fileKey) {
       toast({
-        title: "Invalid Figma URL",
-        description: "Please enter a valid Figma file URL.",
-        variant: "destructive",
-      });
-      return;
+        title: 'Invalid Figma URL',
+        description: 'Please enter a valid Figma file URL.',
+        variant: 'destructive',
+      })
+      return
     }
-    fetchFigmaFile(fileKey);
-  };
+    fetchFigmaFile(fileKey)
+  }
 
   const extractFrames = (documentNode) => {
-    const topLevelFrames = [];
+    const topLevelFrames = []
 
     const findTopLevelNodes = (node) => {
-      if (node.type === "CANVAS" && node.children) {
+      if (node.type === 'CANVAS' && node.children) {
         node.children.forEach((child) => {
           if (
-            child.type === "FRAME" ||
-            child.type === "COMPONENT" ||
-            child.type === "COMPONENT_SET"
+            child.type === 'FRAME' ||
+            child.type === 'COMPONENT' ||
+            child.type === 'COMPONENT_SET'
           ) {
             topLevelFrames.push({
               id: child.id,
@@ -499,79 +500,82 @@ export default function Home() {
               style: child.style,
               characters: child.characters, // Include characters for TEXT nodes
               effects: child.effects, // Include effects for shadows
-            });
+            })
           }
-        });
+        })
       } else if (node.children) {
         node.children.forEach((child) => {
-          const updatedChild = { ...child };
-          if (child.type === "TEXT") {
-            updatedChild.characters = child.characters;
+          const updatedChild = { ...child }
+          if (child.type === 'TEXT') {
+            updatedChild.characters = child.characters
           }
           if (child.effects) {
-            updatedChild.effects = child.effects;
+            updatedChild.effects = child.effects
           }
-          child = updatedChild;
-          findTopLevelNodes(child);
-        });
+          child = updatedChild
+          findTopLevelNodes(child)
+        })
       }
-    };
-
-    if (documentNode) {
-      findTopLevelNodes(documentNode);
     }
 
-    return topLevelFrames;
-  };
+    if (documentNode) {
+      findTopLevelNodes(documentNode)
+    }
+
+    return topLevelFrames
+  }
 
   const handleFrameSelection = (frameId) => {
     setSelectedFrames((prev) =>
       prev.includes(frameId)
         ? prev.filter((id) => id !== frameId)
         : [...prev, frameId]
-    );
-  };
+    )
+  }
 
   const handleProceedToOutput = () => {
     if (selectedFrames.length === 0) {
       toast({
-        title: "No Frames Selected",
+        title: 'No Frames Selected',
         description:
-          "Please select at least one frame or component to generate code.",
-        variant: "destructive",
-      });
-      return;
+          'Please select at least one frame or component to generate code.',
+        variant: 'destructive',
+      })
+      return
     }
-    setStep(3);
-  };
+
+    const { html, css } = generateCodeForSelectedFrames()
+    setGeneratedFiles({ html, css })
+    setStep(3)
+  }
 
   const generateCodeForSelectedFrames = () => {
     const selectedFrameNodes = frames.filter((frame) =>
       selectedFrames.includes(frame.id)
-    );
+    )
 
     if (!selectedFrameNodes.length) {
-      return { html: "", css: "" };
+      return { html: '', css: '' }
     }
 
     const htmlContent = selectedFrameNodes
       .map((frame) => {
         return `<div class="frame-wrapper">
         ${generateHtmlFromNodes([frame])}
-      </div>`;
+      </div>`
       })
-      .join("\n\n");
+      .join('\n\n')
 
     const cssContent = selectedFrameNodes
       .map((frame) => generateCssFromStyles(frame))
-      .join("\n\n");
+      .join('\n\n')
 
     const fullHtml = `<!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>${figmaData?.name || "Figma Export"}</title>
+        <title>${figmaData?.name || 'Figma Export'}</title>
         <link rel="stylesheet" href="styles.css">
     </head>
     <body>
@@ -579,7 +583,7 @@ export default function Home() {
           ${htmlContent}
         </div>
     </body>
-    </html>`;
+    </html>`
 
     const fullCss = `
       body {
@@ -588,209 +592,204 @@ export default function Home() {
         font-family: Arial, sans-serif;
       }
       ${cssContent}
-    `;
+    `
 
-    return { html: fullHtml, css: fullCss };
-  };
+    return { html: fullHtml, css: fullCss }
+  }
 
   const downloadImages = async (nodesToProcess, fileKey, accessToken) => {
-    const imageMap = new Map();
-    const imageNodeIds = [];
+    const imageMap = new Map()
+    const imageNodeIds = []
 
     const findImageNodes = (node) => {
-      if (node.type === "IMAGE" && node.id.split(":")[0]) {
-        imageNodeIds.push(node.id.split(":")[0]);
+      if (node.type === 'IMAGE' && node.id.split(':')[0]) {
+        imageNodeIds.push(node.id.split(':')[0])
       }
       if (node.children && Array.isArray(node.children)) {
-        node.children.forEach(findImageNodes);
+        node.children.forEach(findImageNodes)
       }
-    };
+    }
 
-    nodesToProcess.forEach(findImageNodes);
+    nodesToProcess.forEach(findImageNodes)
 
     if (imageNodeIds.length === 0) {
-      return imageMap;
+      return imageMap
     }
 
     try {
-      const idsString = imageNodeIds.join(",");
+      const idsString = imageNodeIds.join(',')
       const response = await fetch(
         `https://api.figma.com/v1/images/${fileKey}?ids=${idsString}&format=png`,
         {
           headers: {
-            "X-Figma-Token": accessToken,
+            'X-Figma-Token': accessToken,
           },
         }
-      );
+      )
 
       if (!response.ok) {
-        throw new Error(
-          `Failed to get image URLs (Status: ${response.status})`
-        );
+        throw new Error(`Failed to get image URLs (Status: ${response.status})`)
       }
 
-      const data = await response.json();
+      const data = await response.json()
 
       if (data.err) {
-        throw new Error(`Figma API error getting image URLs: ${data.err}`);
+        throw new Error(`Figma API error getting image URLs: ${data.err}`)
       }
 
       if (!data.images || Object.keys(data.images).length === 0) {
-        console.warn("Figma API returned no image URLs for the requested IDs.");
-        return imageMap;
+        console.warn('Figma API returned no image URLs for the requested IDs.')
+        return imageMap
       }
 
       const downloadPromises = Object.entries(data.images).map(
         async ([nodeId, imageUrl]) => {
           if (!imageUrl) {
-            console.warn(`No URL returned for image node ${nodeId}`);
-            return;
+            console.warn(`No URL returned for image node ${nodeId}`)
+            return
           }
           try {
-            const imageResponse = await fetch(imageUrl);
+            const imageResponse = await fetch(imageUrl)
             if (!imageResponse.ok) {
               throw new Error(
                 `Failed to download image ${nodeId} (Status: ${imageResponse.status})`
-              );
+              )
             }
-            const blob = await imageResponse.blob();
-            imageMap.set(`${nodeId}.png`, blob);
+            const blob = await imageResponse.blob()
+            imageMap.set(`${nodeId}.png`, blob)
           } catch (imgError) {
             console.error(
               `Failed to download or process image ${nodeId} from ${imageUrl}:`,
               imgError
-            );
+            )
           }
         }
-      );
+      )
 
-      await Promise.all(downloadPromises);
+      await Promise.all(downloadPromises)
     } catch (error) {
-      console.error("Failed to download images:", error);
+      console.error('Failed to download images:', error)
       toast({
-        title: "Image Download Failed",
+        title: 'Image Download Failed',
         description:
           error instanceof Error
             ? error.message
-            : "Could not download images from Figma.",
-        variant: "destructive",
-      });
+            : 'Could not download images from Figma.',
+        variant: 'destructive',
+      })
     }
 
-    return imageMap;
-  };
+    return imageMap
+  }
 
   const handleDownload = async () => {
     if (!figmaData || !figmaData.document) {
       toast({
-        title: "Error",
-        description: "No Figma data loaded.",
-        variant: "destructive",
-      });
-      return;
+        title: 'Error',
+        description: 'No Figma data loaded.',
+        variant: 'destructive',
+      })
+      return
     }
     if (selectedFrames.length === 0) {
       toast({
-        title: "Error",
-        description: "No frames selected for download.",
-        variant: "destructive",
-      });
-      return;
+        title: 'Error',
+        description: 'No frames selected for download.',
+        variant: 'destructive',
+      })
+      return
     }
 
-    setIsProcessing(true);
+    setIsProcessing(true)
 
     try {
-      const { html, css } = generateCodeForSelectedFrames();
-      setGeneratedFiles({ html, css });
+      const { html, css } = generateCodeForSelectedFrames()
+      setGeneratedFiles({ html, css })
 
-      const zip = new JSZip();
+      const zip = new JSZip()
 
-      if (outputType === "html" || outputType === "both") {
-        zip.file("index.html", html);
+      if (outputType === 'html' || outputType === 'both') {
+        zip.file('index.html', html)
       }
-      if (outputType === "css" || outputType === "both") {
-        zip.file("styles.css", css);
+      if (outputType === 'css' || outputType === 'both') {
+        zip.file('styles.css', css)
       }
 
-      if (
-        (outputType === "html" || outputType === "both") &&
-        figmaUrl
-      ) {
-        const fileKey = extractFileKey(figmaUrl);
-        const accessToken = FIGMA_ACCESS_TOKEN;
+      if ((outputType === 'html' || outputType === 'both') && figmaUrl) {
+        const fileKey = extractFileKey(figmaUrl)
+        const accessToken = FIGMA_ACCESS_TOKEN
 
         if (fileKey && accessToken) {
           const selectedFrameNodes = frames.filter((frame) =>
             selectedFrames.includes(frame.id)
-          );
+          )
 
           toast({
-            title: "Downloading Images",
-            description: "Fetching image assets from Figma...",
-          });
+            title: 'Downloading Images',
+            description: 'Fetching image assets from Figma...',
+          })
           const images = await downloadImages(
             selectedFrameNodes,
             fileKey,
             accessToken
-          );
+          )
 
           if (images.size > 0) {
-            const imagesFolder = zip.folder("images");
+            const imagesFolder = zip.folder('images')
             if (imagesFolder) {
               for (const [filename, blob] of images) {
-                imagesFolder.file(filename, blob);
+                imagesFolder.file(filename, blob)
               }
               toast({
-                title: "Images Added",
+                title: 'Images Added',
                 description: `${images.size} images added to ZIP.`,
-              });
+              })
             }
           } else {
             toast({
-              title: "No Images Found",
-              description: "No images needed or found for selected frames.",
-            });
+              title: 'No Images Found',
+              description: 'No images needed or found for selected frames.',
+            })
           }
         } else {
           console.warn(
-            "Missing File Key or Access Token, skipping image download."
-          );
+            'Missing File Key or Access Token, skipping image download.'
+          )
           toast({
-            title: "Skipping Images",
-            description: "Missing Figma URL or Token for image download.",
-            variant: "destructive",
-          });
+            title: 'Skipping Images',
+            description: 'Missing Figma URL or Token for image download.',
+            variant: 'destructive',
+          })
         }
       }
 
       toast({
-        title: "Generating ZIP",
-        description: "Preparing your download...",
-      });
-      const zipContent = await zip.generateAsync({ type: "blob" });
+        title: 'Generating ZIP',
+        description: 'Preparing your download...',
+      })
+      const zipContent = await zip.generateAsync({ type: 'blob' })
       const safeFilename =
-        figmaData.name.toLowerCase().replace(/[^a-z0-9]/g, "-") || "export";
-      saveAs(zipContent, `${safeFilename}.zip`);
+        figmaData.name.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'export'
+      saveAs(zipContent, `${safeFilename}.zip`)
 
       toast({
-        title: "Download Ready!",
-        description: "Your code has been generated and zipped.",
-      });
+        title: 'Download Ready!',
+        description: 'Your code has been generated and zipped.',
+      })
     } catch (error) {
-      console.error("Download failed:", error);
+      console.error('Download failed:', error)
       toast({
-        title: "Download Failed",
+        title: 'Download Failed',
         description:
           error instanceof Error
             ? error.message
-            : "An unexpected error occurred during ZIP generation.",
-        variant: "destructive",
-      });
+            : 'An unexpected error occurred during ZIP generation.',
+        variant: 'destructive',
+      })
     } finally {
-      setIsProcessing(false);
+      setIsProcessing(false)
     }
-  };
+  }
 
   const renderStepContent = () => {
     switch (step) {
@@ -809,35 +808,15 @@ export default function Home() {
                 disabled={isProcessing}
               />
             </div>
-            
-            {/*
-            <div className="w-full space-y-2">
-               <Label htmlFor="figmaToken">Figma Access Token</Label>
-               <Input
-                 id="figmaToken"
-                 type="password"
-                 placeholder="Enter your Figma Personal Access Token"
-                 value={figmaToken}
-                 onChange={(e) => setFigmaToken(e.target.value)}
-                 className="w-full"
-                 disabled={isProcessing}
-               />
-               <p className="text-xs text-muted-foreground">
-                   Needed to access file content and images. Your token is used only in your browser and not stored.
-                   <a href="https://www.figma.com/developers/api#access-tokens" target="_blank" rel="noopener noreferrer" className="underline ml-1">How to get a token?</a>
-               </p>
-            </div>
-             */}
-
             <Button
               onClick={handleProcessClick}
               disabled={!figmaUrl || isProcessing}
               className="w-full sm:w-auto"
             >
-              {isProcessing ? "Processing..." : "Submit"}
+              {isProcessing ? 'Processing...' : 'Submit'}
             </Button>
           </div>
-        );
+        )
 
       case 2:
         return (
@@ -846,7 +825,7 @@ export default function Home() {
               Select Frames or Components
             </h2>
             <p className="text-muted-foreground mb-6 text-center sm:text-left">
-              Choose the top-level items you want to convert to code.
+              Choose the items you want to convert to code.
             </p>
             {frames.length === 0 && !isProcessing && (
               <p className="text-center text-red-500">
@@ -859,8 +838,8 @@ export default function Home() {
                   key={frame.id}
                   className={`p-4 cursor-pointer transition-all border-2 ${
                     selectedFrames.includes(frame.id)
-                      ? "border-primary ring-2 ring-primary ring-offset-2"
-                      : "border-border hover:border-muted-foreground/50"
+                      ? 'border-primary ring-2 ring-primary ring-offset-2'
+                      : 'border-border hover:border-muted-foreground/50'
                   }`}
                   onClick={() => handleFrameSelection(frame.id)}
                 >
@@ -885,10 +864,10 @@ export default function Home() {
             <div className="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
               <Button
                 onClick={() => {
-                  setStep(1);
-                  setFigmaData(null);
-                  setFrames([]);
-                  setSelectedFrames([]);
+                  setStep(1)
+                  setFigmaData(null)
+                  setFrames([])
+                  setSelectedFrames([])
                 }}
                 variant="outline"
               >
@@ -902,13 +881,13 @@ export default function Home() {
               </Button>
             </div>
           </div>
-        );
+        )
 
       case 3:
         return (
-          <div className="mt-8 w-full max-w-md mx-auto">
+          <div className="mt-8 w-full max-w-2xl mx-auto">
             <h2 className="text-2xl font-bold mb-6 text-center">
-              Output Options
+              Download Options
             </h2>
             <Tabs
               defaultValue={outputType}
@@ -929,34 +908,30 @@ export default function Home() {
                 Back to Selection
               </Button>
               <Button onClick={handleDownload} disabled={isProcessing}>
-                {isProcessing ? "Generating ZIP..." : "Download ZIP"}
+                {isProcessing ? 'Generating ZIP...' : 'Download ZIP'}
               </Button>
             </div>
-            {(outputType === "html" || outputType === "both") &&
-              generatedFiles.html && (
-                <div className="mt-6">
-                  <h3 className="text-lg font-semibold mb-2">HTML Preview</h3>
-                  <pre className="bg-muted p-4 rounded-md text-xs overflow-auto max-h-60">
-                    <code>{generatedFiles.html}</code>
-                  </pre>
-                </div>
-              )}
-            {(outputType === "css" || outputType === "both") &&
-              generatedFiles.css && (
-                <div className="mt-4">
-                  <h3 className="text-lg font-semibold mb-2">CSS Preview</h3>
-                  <pre className="bg-muted p-4 rounded-md text-xs overflow-auto max-h-60">
-                    <code>{generatedFiles.css}</code>
-                  </pre>
-                </div>
-              )}
+            <section>
+              <div className="mt-6">
+                <h3 className="text-lg font-semibold mb-2">HTML Preview</h3>
+                <pre className="bg-muted p-4 rounded-md text-xs overflow-auto max-h-60">
+                  <code>{generatedFiles.html}</code>
+                </pre>
+              </div>
+              <div className="mt-4">
+                <h3 className="text-lg font-semibold mb-2">CSS Preview</h3>
+                <pre className="bg-muted p-4 rounded-md text-xs overflow-auto max-h-60">
+                  <code>{generatedFiles.css}</code>
+                </pre>
+              </div>
+            </section>
           </div>
-        );
+        )
 
       default:
-        return null;
+        return null
     }
-  };
+  }
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -977,9 +952,9 @@ export default function Home() {
             <h1 className="text-4xl font-extrabold tracking-tight text-primary sm:text-5xl lg:text-6xl">
               Transform Your Designs
             </h1>
-            <p className="mt-6 text-lg leading-8 text-muted-foreground max-w-2xl mx-auto">
-              Enter a Figma file URL and your Personal Access Token to load
-              frames, then select items and export them as HTML & CSS code.
+            <p className="mt-6 text-lg leading-8 text-muted-foreground max-w-md mx-auto">
+              Enter a Figma file URL to load frames, then select frames and
+              export them as HTML & CSS code.
             </p>
           </div>
         )}
@@ -994,7 +969,7 @@ export default function Home() {
               </h3>
               <div className="space-y-2 text-sm text-muted-foreground">
                 <p>
-                  Last Modified:{" "}
+                  Last Modified:{' '}
                   {new Date(figmaData.lastModified).toLocaleString()}
                 </p>
                 <p>Components: {figmaData.components}</p>
@@ -1004,7 +979,7 @@ export default function Home() {
                     src={figmaData.thumbnailUrl}
                     alt="Figma File Preview"
                     className="mt-4 rounded-md w-full border border-border"
-                    onError={(e) => (e.currentTarget.style.display = "none")}
+                    onError={(e) => (e.currentTarget.style.display = 'none')}
                   />
                 )}
               </div>
@@ -1030,12 +1005,12 @@ export default function Home() {
               />
               <FeatureCard
                 icon={<Code className="h-6 w-6 text-primary" />}
-                title="2. Generate Code"
-                description="Get basic HTML structure and CSS styles based on your Figma design's properties and layout."
+                title="2. Select Frame"
+                description="Get the frame based on your Figma design's properties and layout."
               />
               <FeatureCard
                 icon={<Eye className="h-6 w-6 text-primary" />}
-                title="3. Download & Refine"
+                title="3. Preview & Download"
                 description="Download a ZIP file with HTML, CSS, and images. Refine the code for production use."
               />
             </div>
@@ -1051,19 +1026,5 @@ export default function Home() {
         </div>
       </footer>
     </main>
-  );
-}
-
-function FeatureCard({ icon, title, description }) {
-  return (
-    <Card className="p-6 text-center sm:text-left">
-      <div className="flex flex-col sm:flex-row items-center justify-center sm:justify-start">
-        {icon}
-        <h3 className="ml-0 sm:ml-3 mt-2 sm:mt-0 text-lg font-semibold">
-          {title}
-        </h3>
-      </div>
-      <p className="mt-2 text-muted-foreground">{description}</p>
-    </Card>
-  );
+  )
 }
