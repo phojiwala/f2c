@@ -104,50 +104,8 @@ export function rgbaFromColor(color, opacity = 1) {
   return `rgba(${r}, ${g}, ${b}, ${a})`
 }
 
-// We need to modify the generateHtmlFromNodes function to better structure login forms
 export const generateHtmlFromNodes = (nodes) => {
-  // First, sort nodes by vertical position for better layout
-  const sortedNodes = [...nodes].sort((a, b) => {
-    const aY = a.absoluteBoundingBox?.y || 0;
-    const bY = b.absoluteBoundingBox?.y || 0;
-    return aY - bY;
-  });
-
-  // Check if this is a login form
-  const isLoginForm = sortedNodes.some(node =>
-    node.name?.toLowerCase().includes('login') ||
-    (node.type === 'TEXT' && node.characters?.toLowerCase().includes('login'))
-  );
-
-  if (isLoginForm) {
-    // Create a structured login form
-    return `
-      <div class="login-form-container">
-        <h2 class="login-title">Login</h2>
-        <form class="login-form">
-          <div class="input-group">
-            <label for="email">Email</label>
-            <input type="email" id="email" class="form-input" placeholder="Enter email address" required>
-          </div>
-          <div class="input-group">
-            <label for="password">Password</label>
-            <input type="password" id="password" class="form-input" placeholder="Enter password" required>
-          </div>
-          <div class="remember-me-container">
-            <label class="remember-me">
-              <input type="checkbox" class="remember-checkbox">
-              <span>Remember me</span>
-            </label>
-            <a href="#" class="forgot-password">Forgot Password?</a>
-          </div>
-          <button type="submit" class="login-button">Login</button>
-        </form>
-      </div>
-    `;
-  }
-
-  // For non-login forms, use the regular node processing
-  return sortedNodes
+  return nodes
     .map((node) => {
       let element = ''
       const baseClass = `${node.type.toLowerCase()}-${node.id.replace(/:/g, '-')}`
@@ -172,9 +130,7 @@ export const generateHtmlFromNodes = (nodes) => {
             element = `<div class="${className} login-container">
               <div class="login-card">
                 <h1 class="login-title">Login</h1>
-                <form class="login-form">
-                  ${generateHtmlFromNodes(sortedChildren)}
-                </form>
+                ${generateHtmlFromNodes(sortedChildren)}
               </div>
             </div>`
           } else {
@@ -202,10 +158,9 @@ export const generateHtmlFromNodes = (nodes) => {
           } else if (text.includes('email') || text.includes('password')) {
             const inputType = text.includes('password') ? 'password' : 'email'
             const placeholder = text.includes('password') ? 'Enter password' : 'Enter email address'
-            const labelText = node.characters || (text.includes('password') ? 'Password' : 'Email Address')
             element = `<div class="input-group">
-              <label class="${className}">${labelText}<span class="required">*</span></label>
-              <input type="${inputType}" class="form-input" placeholder="${placeholder}" required />
+              <label class="${className}">${node.characters}</label>
+              <input type="${inputType}" class="form-input" placeholder="${placeholder}" />
             </div>`
           } else {
             element = `<p class="${className}">${node.characters}</p>`
@@ -216,19 +171,10 @@ export const generateHtmlFromNodes = (nodes) => {
         case 'RECTANGLE': {
           const name = node.name?.toLowerCase() || ''
           if (name.includes('button') || name.includes('login')) {
-            element = `<button type="submit" class="${className} login-button">Login</button>`
-          } else if (name.includes('input') || name.includes('field')) {
-            // This is likely an input field background
-            element = ''
+            element = `<button class="${className} login-button">Login</button>`
           } else {
             element = `<div class="${className}"></div>`
           }
-          break
-        }
-
-        case 'IMAGE': {
-          // Handle logo or other images
-          element = `<img src="images/${node.id.split(':')[0]}.png" class="${className}" alt="${node.name || 'Image'}" />`
           break
         }
 
@@ -250,9 +196,11 @@ export const generateCssFromStyles = (node) => {
 
   // Extract dimensions if available
   if (node.absoluteBoundingBox) {
-    const { width, height } = node.absoluteBoundingBox
+    const { width, height, x, y } = node.absoluteBoundingBox
     if (width) cssRules.push(`width: ${width}px`)
     if (height) cssRules.push(`height: ${height}px`)
+    if (x) cssRules.push(`left: ${x}px`)
+    if (y) cssRules.push(`top: ${y}px`)
   }
 
   // Layout properties
@@ -346,179 +294,24 @@ export const generateCssFromStyles = (node) => {
     }
   }
 
-  // Special case styling for login components
-  if (node.name?.toLowerCase().includes('login-container') || baseClass.includes('login-container')) {
-    cssRules.push('display: flex')
-    cssRules.push('justify-content: center')
-    cssRules.push('align-items: center')
-    cssRules.push('min-height: 100vh')
-    cssRules.push('background-color: #f5f5f5')
+  // Opacity
+  if (typeof node.opacity === 'number') {
+    cssRules.push(`opacity: ${node.opacity}`)
   }
 
-  if (node.name?.toLowerCase().includes('login-card') || baseClass.includes('login-card')) {
-    cssRules.push('background-color: white')
-    cssRules.push('border-radius: 8px')
-    cssRules.push('box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1)')
-    cssRules.push('padding: 32px')
-    cssRules.push('width: 100%')
-    cssRules.push('max-width: 400px')
-    cssRules.push('display: flex')
-    cssRules.push('flex-direction: column')
-    cssRules.push('gap: 24px')
+  // Blend mode
+  if (node.blendMode && node.blendMode !== 'NORMAL') {
+    cssRules.push(`mix-blend-mode: ${node.blendMode.toLowerCase()}`)
   }
 
-  if (node.name?.toLowerCase().includes('login-form') || baseClass.includes('login-form')) {
-    cssRules.push('display: flex')
-    cssRules.push('flex-direction: column')
-    cssRules.push('gap: 16px')
-  }
-
-  if (node.name?.toLowerCase().includes('login-title') || baseClass.includes('login-title')) {
-    cssRules.push('font-size: 24px')
-    cssRules.push('font-weight: 600')
-    cssRules.push('text-align: center')
-    cssRules.push('margin-bottom: 16px')
-  }
-
-  if (baseClass.includes('input-group')) {
-    cssRules.push('display: flex')
-    cssRules.push('flex-direction: column')
-    cssRules.push('gap: 8px')
-  }
-
-  if (node.type === 'TEXT' && (node.characters?.toLowerCase().includes('email') || node.characters?.toLowerCase().includes('password'))) {
-    cssRules.push('font-size: 14px')
-    cssRules.push('font-weight: 500')
-    cssRules.push('color: #333')
-  }
-
-  if (baseClass.includes('form-input')) {
-    cssRules.push('padding: 10px 12px')
-    cssRules.push('border: 1px solid #ddd')
-    cssRules.push('border-radius: 4px')
-    cssRules.push('font-size: 14px')
-    cssRules.push('width: 100%')
-    cssRules.push('transition: border-color 0.2s')
-  }
-
-  if (baseClass.includes('login-button')) {
-    cssRules.push('background-color: #003966')
-    cssRules.push('color: white')
-    cssRules.push('border: none')
-    cssRules.push('border-radius: 4px')
-    cssRules.push('padding: 12px')
-    cssRules.push('font-weight: 600')
-    cssRules.push('cursor: pointer')
-    cssRules.push('transition: background-color 0.2s')
-  }
-
-  if (baseClass.includes('remember-me')) {
-    cssRules.push('display: flex')
-    cssRules.push('align-items: center')
-    cssRules.push('gap: 8px')
-    cssRules.push('font-size: 14px')
-  }
-
-  if (baseClass.includes('forgot-password')) {
-    cssRules.push('color: #003966')
-    cssRules.push('text-decoration: none')
-    cssRules.push('font-size: 14px')
-    cssRules.push('text-align: right')
-    cssRules.push('display: block')
+  // Constraints and positioning
+  if (node.constraints) {
+    if (node.constraints.horizontal === 'CENTER') cssRules.push('margin-left: auto', 'margin-right: auto')
+    if (node.constraints.vertical === 'CENTER') cssRules.push('margin-top: auto', 'margin-bottom: auto')
   }
 
   if (cssRules.length > 0) {
     styles.push(`.${baseClass} { ${cssRules.join('; ')}; }`)
-  }
-
-  // Add additional generic CSS rules
-  if (baseClass.includes('login-container')) {
-    styles.push(`
-.login-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  background-color: #f5f5f5;
-}
-.login-card {
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  padding: 32px;
-  width: 100%;
-  max-width: 400px;
-}
-.login-title {
-  font-size: 24px;
-  font-weight: 600;
-  text-align: center;
-  margin-bottom: 24px;
-}
-.login-form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.input-group label {
-  font-size: 14px;
-  font-weight: 500;
-}
-.required {
-  color: #e53935;
-  margin-left: 4px;
-}
-.form-input {
-  padding: 10px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-  width: 100%;
-}
-.form-input:focus {
-  border-color: #003966;
-  outline: none;
-}
-.remember-me {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-}
-.remember-checkbox {
-  width: 16px;
-  height: 16px;
-}
-.login-button {
-  background-color: #003966;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  margin-top: 8px;
-}
-.login-button:hover {
-  background-color: #002b4d;
-}
-.forgot-password {
-  color: #003966;
-  text-decoration: none;
-  font-size: 14px;
-  text-align: right;
-  display: block;
-  margin-top: 8px;
-}
-.forgot-password:hover {
-  text-decoration: underline;
-}
-    `)
   }
 
   // Process children recursively

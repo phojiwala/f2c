@@ -243,117 +243,102 @@ export default function Home() {
 
     // Apply component-specific enhancements
     // In the enhanceComponentStyles function
+    // Update the enhanceComponentStyles function to be more generic
     const enhanceComponentStyles = (componentType, cssContent) => {
-      if (componentType === 'login-form') {
-        return `${cssContent}
+    // Add generic form styles that work for all form types
+    return `${cssContent}
 
-        /* Login Form Styles */
-        .login-form-container {
-          background-color: white;
-          border-radius: 8px;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-          padding: 32px;
-          width: 100%;
-          max-width: 400px;
-          margin: 0 auto;
-        }
+    /* Generic Form Styles */
+    .frame-wrapper {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
 
-        .login-title {
-          font-size: 24px;
-          font-weight: 600;
-          text-align: center;
-          margin-bottom: 24px;
-          color: #333;
-        }
+    .form-title {
+      font-size: 24px;
+      font-weight: 600;
+      text-align: center;
+      margin-bottom: 24px;
+      color: #333;
+    }
 
-        .login-form {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 16px;
+      width: 100%;
+    }
 
-        .input-group {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
+    .input-group label {
+      font-size: 14px;
+      font-weight: 500;
+      color: #333;
+    }
 
-        .input-group label {
-          font-size: 14px;
-          font-weight: 500;
-          color: #333;
-        }
+    .form-input {
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      width: 100%;
+      background-color: white;
+    }
 
-        .form-input {
-          padding: 10px 12px;
-          border: 1px solid #ddd;
-          border-radius: 4px;
-          font-size: 14px;
-          width: 100%;
-        }
+    .form-input:focus {
+      border-color: #003966;
+      outline: none;
+    }
 
-        .form-input:focus {
-          border-color: #003966;
-          outline: none;
-        }
+    .form-checkbox {
+      width: 16px;
+      height: 16px;
+    }
 
-        .remember-me-container {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin: 8px 0;
-        }
+    .form-button {
+      background-color: #003966;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 8px;
+    }
 
-        .remember-me {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 14px;
-          cursor: pointer;
-        }
+    .form-button:hover {
+      background-color: #002b4d;
+    }
 
-        .remember-checkbox {
-          width: 16px;
-          height: 16px;
-        }
+    .forgot-link {
+      color: #003966;
+      text-decoration: none;
+      font-size: 14px;
+      text-align: right;
+      display: block;
+    }
 
-        .login-button {
-          background-color: #003966;
-          color: white;
-          border: none;
-          border-radius: 4px;
-          padding: 12px;
-          font-weight: 600;
-          cursor: pointer;
-          width: 100%;
-          margin-top: 8px;
-        }
+    .forgot-link:hover {
+      text-decoration: underline;
+    }
 
-        .login-button:hover {
-          background-color: #002b4d;
-        }
+    .remember-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      cursor: pointer;
+    }
 
-        .forgot-password {
-          color: #003966;
-          text-decoration: none;
-          font-size: 14px;
-        }
-
-        .forgot-password:hover {
-          text-decoration: underline;
-        }
-
-        /* Center the login form in the page */
-        .frame-wrapper {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          min-height: 100vh;
-          padding: 20px;
-        }`;
-      }
-
-      return cssContent;
+    .required {
+      color: #e53935;
+      margin-left: 4px;
+    }`;
     };
 
     const htmlContent = selectedFrameNodes
