@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Mark this route as dynamic to handle form data
-export const dynamic = 'force-dynamic';
+// Remove the dynamic export since it's not compatible with static export
+// export const dynamic = 'force-dynamic';
+
+export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
@@ -61,11 +63,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
-// Increase payload size limit for file uploads
-export const config = {
-  api: {
-    bodyParser: false,
-    responseLimit: '10mb',
-  },
-};
