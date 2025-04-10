@@ -107,100 +107,175 @@ export function rgbaFromColor(color, opacity = 1) {
 export const generateHtmlFromNodes = (nodes) => {
   return nodes
     .map((node) => {
-      let element = ''
-      const baseClass = `${node.type.toLowerCase()}-${node.id.replace(/:/g, '-')}`
-      const uniqueClass = `${baseClass}-${node.id.split(':')[0]}`
-      const className = `${baseClass} ${uniqueClass}`
+      const componentType = detectComponentType(node);
+      const layout = detectLayout(node);
+      let element = '';
 
-      switch (node.type) {
-        case 'COMPONENT':
-        case 'GROUP':
-        case 'FRAME': {
-          const sortedChildren = node.children
-            ? [...node.children].sort((a, b) => {
-                const ay = a.absoluteBoundingBox?.y || 0
-                const by = b.absoluteBoundingBox?.y || 0
-                return ay - by
-              })
-            : []
+      // Define className before use
+      const baseClass = `${node.type.toLowerCase()}-${node.id.replace(/:/g, '-')}`;
+      const uniqueClass = `${baseClass}-${node.id.split(':')[0]}`;
+      const className = `${baseClass} ${uniqueClass}`;
 
-          // Check if this is the main login container
-          const isLoginContainer = node.name.toLowerCase().includes('login')
-          if (isLoginContainer) {
-            element = `<div class="${className} login-container">
-              <div class="login-card">
-                <h1 class="login-title">Login</h1>
+      // Generate semantic HTML based on component type
+      if (componentType !== 'generic') {
+        element = generateSemanticHTML(node);
+      } else {
+        switch (node.type) {
+          case 'COMPONENT':
+          case 'GROUP':
+          case 'FRAME': {
+            const sortedChildren = node.children
+              ? [...node.children].sort((a, b) => {
+                  const ay = a.absoluteBoundingBox?.y || 0;
+                  const by = b.absoluteBoundingBox?.y || 0;
+                  return ay - by;
+                })
+              : [];
+
+            const isLoginContainer = node.name.toLowerCase().includes('login');
+            if (isLoginContainer) {
+              element = `<div class="${className} login-container">
+                <div class="login-card">
+                  <h1 class="login-title">Login</h1>
+                  ${generateHtmlFromNodes(sortedChildren)}
+                </div>
+              </div>`;
+            } else {
+              element = `<div class="${className}">
                 ${generateHtmlFromNodes(sortedChildren)}
-              </div>
-            </div>`
-          } else {
-            element = `<div class="${className}">
-              ${generateHtmlFromNodes(sortedChildren)}
-            </div>`
+              </div>`;
+            }
+            break;
           }
-          break
+          // ... rest of your cases
+          default:
+            element = node.children ? generateHtmlFromNodes(node.children) : '';
         }
-
-        case 'TEXT': {
-          const text = node.characters?.toLowerCase() || ''
-          const style = node.style || {}
-
-          if (text.includes('login') && style.fontSize >= 24) {
-            // Skip the login title as it's handled in the container
-            element = ''
-          } else if (text.includes('remember')) {
-            element = `<label class="${className} remember-me">
-              <input type="checkbox" class="remember-checkbox" />
-              <span>${node.characters}</span>
-            </label>`
-          } else if (text.includes('forgot')) {
-            element = `<a href="#" class="${className} forgot-password">${node.characters}</a>`
-          } else if (text.includes('email') || text.includes('password')) {
-            const inputType = text.includes('password') ? 'password' : 'email'
-            const placeholder = text.includes('password') ? 'Enter password' : 'Enter email address'
-            element = `<div class="input-group">
-              <label class="${className}">${node.characters}</label>
-              <input type="${inputType}" class="form-input" placeholder="${placeholder}" />
-            </div>`
-          } else {
-            element = `<p class="${className}">${node.characters}</p>`
-          }
-          break
-        }
-
-        case 'RECTANGLE': {
-          const name = node.name?.toLowerCase() || ''
-          if (name.includes('button') || name.includes('login')) {
-            element = `<button class="${className} login-button">Login</button>`
-          } else {
-            element = `<div class="${className}"></div>`
-          }
-          break
-        }
-
-        default:
-          element = node.children ? generateHtmlFromNodes(node.children) : ''
       }
-
-      return element
+      return element;
     })
-    .join('\n')
-}
+    .join('\n');
+};
+
+// Add this function before generateCssFromStyles
+const generateResponsiveRules = (node) => {
+  if (!node.constraints || !node.absoluteBoundingBox) return '';
+
+  const baseClass = `${node.type.toLowerCase()}-${node.id.replace(/:/g, '-')}`;
+  const breakpoints = {
+    sm: 640,
+    md: 768,
+    lg: 1024,
+    xl: 1280
+  };
+
+  const rules = Object.entries(breakpoints)
+    .map(([size, width]) => {
+      const { width: nodeWidth } = node.absoluteBoundingBox;
+      if (!nodeWidth) return '';
+
+      const responsiveWidth = Math.min(nodeWidth, width * 0.9);
+      return `
+        @media (min-width: ${width}px) {
+          .${baseClass} {
+            width: ${responsiveWidth}px;
+            ${node.constraints.horizontal === 'CENTER' ? 'margin-left: auto; margin-right: auto;' : ''}
+          }
+        }
+      `;
+    })
+    .filter(Boolean)
+    .join('\n');
+
+  return rules;
+};
+
+const generateBaseCssStyles = (node) => {
+  if (!node || !node.id || !node.type) return '';
+
+  const baseClass = `${node.type.toLowerCase()}-${node.id.replace(/:/g, '-')}`;
+  const cssRules = [];
+
+  // Dimensions
+  if (node.absoluteBoundingBox) {
+    const { width, height, x, y } = node.absoluteBoundingBox;
+    if (width) cssRules.push(`width: ${width}px`);
+    if (height) cssRules.push(`height: ${height}px`);
+    if (x) cssRules.push(`left: ${x}px`);
+    if (y) cssRules.push(`top: ${y}px`);
+  }
+
+  // Layout
+  if (node.layoutMode) {
+    cssRules.push(`display: flex`);
+    cssRules.push(`flex-direction: ${node.layoutMode.toLowerCase()}`);
+    if (node.primaryAxisAlignItems) {
+      cssRules.push(`justify-content: ${node.primaryAxisAlignItems.toLowerCase()}`);
+    }
+    if (node.counterAxisAlignItems) {
+      cssRules.push(`align-items: ${node.counterAxisAlignItems.toLowerCase()}`);
+    }
+    if (node.itemSpacing) {
+      cssRules.push(`gap: ${node.itemSpacing}px`);
+    }
+  }
+
+  // Padding
+  if (node.paddingLeft) cssRules.push(`padding-left: ${node.paddingLeft}px`);
+  if (node.paddingRight) cssRules.push(`padding-right: ${node.paddingRight}px`);
+  if (node.paddingTop) cssRules.push(`padding-top: ${node.paddingTop}px`);
+  if (node.paddingBottom) cssRules.push(`padding-bottom: ${node.paddingBottom}px`);
+
+  return cssRules.length > 0 ? `.${baseClass} { ${cssRules.join('; ')}; }` : '';
+};
 
 export const generateCssFromStyles = (node) => {
-  if (!node || !node.id || !node.type) return ''
+  if (!node || !node.id || !node.type) return '';
 
-  const styles = []
-  const baseClass = `${node.type.toLowerCase()}-${node.id.replace(/:/g, '-')}`
-  const cssRules = []
+  const styles = [];
+  const baseClass = `${node.type.toLowerCase()}-${node.id.replace(/:/g, '-')}`;
+  const cssRules = [];
 
+  // Generate base styles
+  const baseStyles = generateBaseCssStyles(node);
+  styles.push(baseStyles);
+
+  // Add layout-specific styles
+  const layout = detectLayout(node);
+  if (layout.type === 'grid') {
+    styles.push(`
+      .${baseClass} {
+        display: grid;
+        grid-template-columns: repeat(${layout.properties.columns}, minmax(${layout.properties.minItemWidth}, 1fr));
+        gap: ${layout.properties.gap}px;
+      }
+    `);
+  } else if (layout.type === 'flex') {
+    styles.push(`
+      .${baseClass} {
+        display: flex;
+        flex-direction: ${layout.properties.direction};
+        gap: ${layout.properties.gap}px;
+        justify-content: ${layout.properties.justify};
+        align-items: ${layout.properties.align};
+      }
+    `);
+  }
+
+  // Add responsive styles
+  const responsiveStyles = generateResponsiveRules(node);
+  if (responsiveStyles) {
+    styles.push(responsiveStyles);
+  }
+
+  // Remove duplicate baseClass declaration
   // Extract dimensions if available
   if (node.absoluteBoundingBox) {
-    const { width, height, x, y } = node.absoluteBoundingBox
-    if (width) cssRules.push(`width: ${width}px`)
-    if (height) cssRules.push(`height: ${height}px`)
-    if (x) cssRules.push(`left: ${x}px`)
-    if (y) cssRules.push(`top: ${y}px`)
+    const { width, height, x, y } = node.absoluteBoundingBox;
+    if (width) cssRules.push(`width: ${width}px`);
+    if (height) cssRules.push(`height: ${height}px`);
+    if (x) cssRules.push(`left: ${x}px`);
+    if (y) cssRules.push(`top: ${y}px`);
   }
 
   // Layout properties
@@ -322,4 +397,121 @@ export const generateCssFromStyles = (node) => {
   }
 
   return styles.join('\n')
+}
+
+const detectComponentType = (node) => {
+  const name = node.name?.toLowerCase() || '';
+  const hasChildren = node.children?.length > 0;
+
+  // Common patterns
+  if (name.includes('nav') || name.includes('header')) return 'navigation';
+  if (name.includes('hero')) return 'hero';
+  if (name.includes('card')) return 'card';
+  if (name.includes('footer')) return 'footer';
+  if (name.includes('form')) return 'form';
+  if (name.includes('grid')) return 'grid';
+  if (name.includes('slider')) return 'slider';
+
+  // Layout detection
+  if (hasChildren && node.layoutMode === 'HORIZONTAL') return 'row';
+  if (hasChildren && node.layoutMode === 'VERTICAL') return 'column';
+
+  return 'generic';
+}
+
+const generateResponsiveCSS = (node) => {
+  const styles = [];
+  const breakpoints = {
+    sm: 640,
+    md: 768,
+    lg: 1024,
+    xl: 1280
+  };
+
+  // Base styles
+  styles.push(generateCssFromStyles(node));
+
+  // Responsive styles
+  if (node.constraints) {
+    Object.entries(breakpoints).forEach(([size, width]) => {
+      const mediaQuery = `@media (min-width: ${width}px) {`;
+      const responsiveRules = [];
+
+      // Adjust sizes based on constraints
+      if (node.absoluteBoundingBox) {
+        const { width: nodeWidth } = node.absoluteBoundingBox;
+        if (nodeWidth) {
+          const responsiveWidth = Math.min(nodeWidth, width * 0.9);
+          responsiveRules.push(`width: ${responsiveWidth}px`);
+        }
+      }
+
+      if (responsiveRules.length > 0) {
+        styles.push(`${mediaQuery}\n  .${node.type.toLowerCase()}-${node.id} {\n    ${responsiveRules.join(';\n    ')}\n  }\n}`);
+      }
+    });
+  }
+
+  return styles.join('\n\n');
+}
+
+const detectLayout = (node) => {
+  const layout = {
+    type: 'default',
+    properties: {}
+  };
+
+  if (node.layoutMode === 'GRID') {
+    layout.type = 'grid';
+    layout.properties = {
+      columns: node.layoutGrids?.[0]?.count || 'auto-fit',
+      gap: node.itemSpacing || 0,
+      minItemWidth: '200px'
+    };
+  } else if (node.layoutMode === 'HORIZONTAL' || node.layoutMode === 'VERTICAL') {
+    layout.type = 'flex';
+    layout.properties = {
+      direction: node.layoutMode.toLowerCase(),
+      gap: node.itemSpacing || 0,
+      justify: node.primaryAxisAlignItems?.toLowerCase() || 'start',
+      align: node.counterAxisAlignItems?.toLowerCase() || 'stretch'
+    };
+  }
+
+  return layout;
+}
+
+const generateSemanticHTML = (node) => {
+  const type = detectComponentType(node);
+  const layout = detectLayout(node);
+
+  let tag = 'div';
+  let attributes = '';
+
+  // Determine semantic HTML tag
+  switch(type) {
+    case 'navigation':
+      tag = 'nav';
+      break;
+    case 'header':
+      tag = 'header';
+      break;
+    case 'footer':
+      tag = 'footer';
+      break;
+    case 'grid':
+      attributes = ' role="grid"';
+      break;
+    case 'slider':
+      attributes = ' role="slider"';
+      break;
+  }
+
+  // Add layout classes
+  const layoutClass = layout.type === 'grid' ? 'grid-layout' :
+                     layout.type === 'flex' ? `flex-${layout.properties.direction}` : '';
+
+  return `<${tag} class="${node.type.toLowerCase()}-${node.id} ${layoutClass}"${attributes}>
+    ${node.children ? generateHtmlFromNodes(node.children) : ''}
+  </${tag}>`;
 }
