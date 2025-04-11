@@ -114,8 +114,8 @@ export const generateHtmlFromNodes = (nodes) => {
 
       switch (node.type) {
         case 'COMPONENT':
-        case 'GROUP':
-        case 'FRAME': {
+        case 'FRAME':
+        case 'GROUP': {
           const sortedChildren = node.children
             ? [...node.children].sort((a, b) => {
                 const ay = a.absoluteBoundingBox?.y || 0
@@ -124,15 +124,8 @@ export const generateHtmlFromNodes = (nodes) => {
               })
             : []
 
-          // Check if this is the main login container
-          const isLoginContainer = node.name.toLowerCase().includes('login')
-          if (isLoginContainer) {
-            element = `<div class="${className} login-container">
-              <div class="login-card">
-                <h1 class="login-title">Login</h1>
-                ${generateHtmlFromNodes(sortedChildren)}
-              </div>
-            </div>`
+          if (sortedChildren.length === 1 && ['TEXT', 'RECTANGLE', 'ELLIPSE', 'IMAGE'].includes(sortedChildren[0].type)) {
+            element = generateHtmlFromNodes(sortedChildren)
           } else {
             element = `<div class="${className}">
               ${generateHtmlFromNodes(sortedChildren)}
@@ -142,39 +135,50 @@ export const generateHtmlFromNodes = (nodes) => {
         }
 
         case 'TEXT': {
-          const text = node.characters?.toLowerCase() || ''
-          const style = node.style || {}
+          const text = node.characters?.trim() || ''
+          const lower = text.toLowerCase()
+          const isLargeTitle = node.style?.fontSize >= 22 && node.style?.fontWeight >= 600
 
-          if (text.includes('login') && style.fontSize >= 24) {
-            // Skip the login title as it's handled in the container
-            element = ''
-          } else if (text.includes('remember')) {
-            element = `<label class="${className} remember-me">
-              <input type="checkbox" class="remember-checkbox" />
-              <span>${node.characters}</span>
-            </label>`
-          } else if (text.includes('forgot')) {
-            element = `<a href="#" class="${className} forgot-password">${node.characters}</a>`
-          } else if (text.includes('email') || text.includes('password')) {
-            const inputType = text.includes('password') ? 'password' : 'email'
-            const placeholder = text.includes('password') ? 'Enter password' : 'Enter email address'
-            element = `<div class="input-group">
-              <label class="${className}">${node.characters}</label>
-              <input type="${inputType}" class="form-input" placeholder="${placeholder}" />
-            </div>`
+          if (isLargeTitle) {
+            element = `<h1 class="form-title ${className}">${text}</h1>`
+          } else if (lower.includes('enter')) {
+            const type = lower.includes('password')
+              ? 'password'
+              : lower.includes('email')
+              ? 'email'
+              : 'text'
+            element = `<input type="${type}" class="form-input ${className}" placeholder="${text}" />`
+          } else if (lower.includes('forgot')) {
+            element = `<a href="#" class="form-link ${className}">${text}</a>`
+          } else if (['submit', 'login', 'reset'].includes(lower)) {
+            element = `<button class="form-button ${className}">${text}</button>`
           } else {
-            element = `<p class="${className}">${node.characters}</p>`
+            element = `<label class="form-label ${className}">${text}</label>`
           }
           break
         }
 
         case 'RECTANGLE': {
           const name = node.name?.toLowerCase() || ''
-          if (name.includes('button') || name.includes('login')) {
-            element = `<button class="${className} login-button">Login</button>`
+          const looksLikeButton = name.includes('button') || node.children?.some(c => c.characters?.toLowerCase().includes('submit'))
+
+          if (looksLikeButton) {
+            const label = node.children?.find(c => c.type === 'TEXT')?.characters || 'Submit'
+            element = `<button class="form-button ${className}">${label}</button>`
           } else {
             element = `<div class="${className}"></div>`
           }
+          break
+        }
+
+        case 'ELLIPSE': {
+          element = `<div class="${className}"></div>`
+          break
+        }
+
+        case 'IMAGE': {
+          const filename = `${node.id.split(':')[0]}.png`
+          element = `<img src="images/${filename}" class="${className}" alt="${node.name || 'Image'}" />`
           break
         }
 
@@ -194,28 +198,25 @@ export const generateCssFromStyles = (node) => {
   const baseClass = `${node.type.toLowerCase()}-${node.id.replace(/:/g, '-')}`
   const cssRules = []
 
-  // Extract dimensions if available
+  // Dimensions and positioning
   if (node.absoluteBoundingBox) {
     const { width, height, x, y } = node.absoluteBoundingBox
     if (width) cssRules.push(`width: ${width}px`)
     if (height) cssRules.push(`height: ${height}px`)
-    if (x) cssRules.push(`left: ${x}px`)
-    if (y) cssRules.push(`top: ${y}px`)
+    if (x !== undefined) cssRules.push(`left: ${x}px`)
+    if (y !== undefined) cssRules.push(`top: ${y}px`)
   }
 
-  // Layout properties
+  // Flex layout
   if (node.layoutMode) {
     cssRules.push(`display: flex`)
     cssRules.push(`flex-direction: ${node.layoutMode.toLowerCase()}`)
-    if (node.primaryAxisAlignItems) {
+    if (node.primaryAxisAlignItems)
       cssRules.push(`justify-content: ${node.primaryAxisAlignItems.toLowerCase()}`)
-    }
-    if (node.counterAxisAlignItems) {
+    if (node.counterAxisAlignItems)
       cssRules.push(`align-items: ${node.counterAxisAlignItems.toLowerCase()}`)
-    }
-    if (node.itemSpacing) {
+    if (node.itemSpacing)
       cssRules.push(`gap: ${node.itemSpacing}px`)
-    }
     if (node.paddingLeft) cssRules.push(`padding-left: ${node.paddingLeft}px`)
     if (node.paddingRight) cssRules.push(`padding-right: ${node.paddingRight}px`)
     if (node.paddingTop) cssRules.push(`padding-top: ${node.paddingTop}px`)
@@ -224,16 +225,11 @@ export const generateCssFromStyles = (node) => {
 
   // Background
   if (node.fills && node.fills.length > 0) {
-    const visibleFills = node.fills.filter(fill => fill.visible !== false)
+    const visibleFills = node.fills.filter((f) => f.visible !== false)
     if (visibleFills.length > 0) {
       const fill = visibleFills[0]
       if (fill.type === 'SOLID') {
         cssRules.push(`background-color: ${rgbaFromColor(fill.color, fill.opacity)}`)
-      } else if (fill.type === 'GRADIENT_LINEAR') {
-        const gradientStops = fill.gradientStops.map(stop =>
-          `${rgbaFromColor(stop.color)} ${stop.position * 100}%`
-        ).join(', ')
-        cssRules.push(`background: linear-gradient(${fill.gradientTransform[0]}deg, ${gradientStops})`)
       }
     }
   }
@@ -242,55 +238,48 @@ export const generateCssFromStyles = (node) => {
   if (node.strokes && node.strokes.length > 0) {
     const stroke = node.strokes[0]
     if (stroke.type === 'SOLID') {
-      const borderColor = rgbaFromColor(stroke.color, stroke.opacity)
-      const borderWidth = node.strokeWeight || 1
-      const borderStyle = 'solid'
-      cssRules.push(`border: ${borderWidth}px ${borderStyle} ${borderColor}`)
+      cssRules.push(`border: ${node.strokeWeight || 1}px solid ${rgbaFromColor(stroke.color, stroke.opacity)}`)
     }
   }
 
-  // Border radius
+  // Radius
   if (node.cornerRadius) {
     cssRules.push(`border-radius: ${node.cornerRadius}px`)
-  } else if (node.topLeftRadius || node.topRightRadius || node.bottomRightRadius || node.bottomLeftRadius) {
-    cssRules.push(`border-radius: ${node.topLeftRadius || 0}px ${node.topRightRadius || 0}px ${node.bottomRightRadius || 0}px ${node.bottomLeftRadius || 0}px`)
   }
 
-  // Effects (shadows, blurs)
+  // Effects
   if (node.effects) {
-    node.effects.forEach(effect => {
+    node.effects.forEach((effect) => {
       if (effect.type === 'DROP_SHADOW') {
         const { offset, radius, color } = effect
         cssRules.push(`box-shadow: ${offset.x}px ${offset.y}px ${radius}px ${rgbaFromColor(color)}`)
-      } else if (effect.type === 'INNER_SHADOW') {
-        const { offset, radius, color } = effect
-        cssRules.push(`box-shadow: inset ${offset.x}px ${offset.y}px ${radius}px ${rgbaFromColor(color)}`)
-      } else if (effect.type === 'LAYER_BLUR') {
-        cssRules.push(`filter: blur(${effect.radius}px)`)
       }
     })
   }
 
   // Text styles
   if (node.type === 'TEXT' && node.style) {
-    const { style: s } = node
+    const s = node.style
     if (s.fontFamily) cssRules.push(`font-family: "${s.fontFamily}"`)
     if (s.fontSize) cssRules.push(`font-size: ${s.fontSize}px`)
     if (s.fontWeight) cssRules.push(`font-weight: ${s.fontWeight}`)
     if (s.letterSpacing) cssRules.push(`letter-spacing: ${s.letterSpacing}px`)
     if (s.lineHeightPx) cssRules.push(`line-height: ${s.lineHeightPx}px`)
-    if (s.textAlignHorizontal) cssRules.push(`text-align: ${s.textAlignHorizontal.toLowerCase()}`)
-    if (s.textDecoration) cssRules.push(`text-decoration: ${s.textDecoration.toLowerCase()}`)
-    if (s.textCase) {
-      switch (s.textCase) {
-        case 'UPPER': cssRules.push('text-transform: uppercase'); break
-        case 'LOWER': cssRules.push('text-transform: lowercase'); break
-        case 'TITLE': cssRules.push('text-transform: capitalize'); break
-      }
+    if (s.textAlignHorizontal)
+      cssRules.push(`text-align: ${s.textAlignHorizontal.toLowerCase()}`)
+    if (s.fills?.[0]?.type === 'SOLID') {
+      cssRules.push(`color: ${rgbaFromColor(s.fills[0].color, s.fills[0].opacity ?? 1)}`)
     }
-    // Text color from fills
-    if (s.fills && s.fills[0] && s.fills[0].type === 'SOLID') {
-      cssRules.push(`color: ${rgbaFromColor(s.fills[0].color, s.fills[0].opacity)}`)
+
+    // Remove background from labels and links
+    const text = node.characters?.toLowerCase() || ''
+    if (text.includes('email') || text.includes('password')) {
+      cssRules.push(`background-color: transparent`)
+    }
+    if (text.includes('forgot')) {
+      cssRules.push(`background-color: transparent`)
+      cssRules.push(`color: #003966`)
+      cssRules.push(`text-decoration: none`)
     }
   }
 
@@ -304,22 +293,27 @@ export const generateCssFromStyles = (node) => {
     cssRules.push(`mix-blend-mode: ${node.blendMode.toLowerCase()}`)
   }
 
-  // Constraints and positioning
+  // Constraints
   if (node.constraints) {
-    if (node.constraints.horizontal === 'CENTER') cssRules.push('margin-left: auto', 'margin-right: auto')
-    if (node.constraints.vertical === 'CENTER') cssRules.push('margin-top: auto', 'margin-bottom: auto')
+    if (node.constraints.horizontal === 'CENTER') {
+      cssRules.push('margin-left: auto', 'margin-right: auto')
+    }
+    if (node.constraints.vertical === 'CENTER') {
+      cssRules.push('margin-top: auto', 'margin-bottom: auto')
+    }
   }
 
   if (cssRules.length > 0) {
     styles.push(`.${baseClass} { ${cssRules.join('; ')}; }`)
   }
 
-  // Process children recursively
+  // Recurse through children
   if (node.children) {
-    node.children.forEach(child => {
+    node.children.forEach((child) => {
       styles.push(generateCssFromStyles(child))
     })
   }
 
   return styles.join('\n')
 }
+

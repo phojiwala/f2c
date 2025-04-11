@@ -2,6 +2,7 @@ import React from 'react'
 import FeatureCard from './FeatureCard'
 import { Code, Download, Eye } from 'lucide-react'
 import { Card } from './ui/card'
+import { Button } from './ui/button'
 
 export default function Main({ step, renderStepContent, figmaData, isProcessing, frames, setStep }) {
   return (
