@@ -113,9 +113,9 @@ export const generateHtmlFromNodes = (nodes) => {
       const className = `${baseClass} ${uniqueClass}`
 
       switch (node.type) {
-        case 'COMPONENT':
         case 'FRAME':
-        case 'GROUP': {
+        case 'GROUP':
+        case 'COMPONENT': {
           const sortedChildren = node.children
             ? [...node.children].sort((a, b) => {
                 const ay = a.absoluteBoundingBox?.y || 0
@@ -124,63 +124,59 @@ export const generateHtmlFromNodes = (nodes) => {
               })
             : []
 
-          if (sortedChildren.length === 1 && ['TEXT', 'RECTANGLE', 'ELLIPSE', 'IMAGE'].includes(sortedChildren[0].type)) {
-            element = generateHtmlFromNodes(sortedChildren)
-          } else {
-            element = `<div class="${className}">
-              ${generateHtmlFromNodes(sortedChildren)}
-            </div>`
-          }
+          const innerHtml = generateHtmlFromNodes(sortedChildren)
+          element = `<div class="${className} form-container">${innerHtml}</div>`
           break
         }
 
         case 'TEXT': {
           const text = node.characters?.trim() || ''
           const lower = text.toLowerCase()
-          const isLargeTitle = node.style?.fontSize >= 22 && node.style?.fontWeight >= 600
 
-          if (isLargeTitle) {
+          const isTitle = node.style?.fontSize >= 20 && node.style?.fontWeight >= 600
+          const isLabel = /email|password|confirm|name/.test(lower)
+          const isInputPlaceholder = /enter|type/.test(lower)
+          const isLink = /forgot|reset/.test(lower)
+          const isCheckbox = /remember/.test(lower)
+
+          if (isTitle) {
             element = `<h1 class="form-title ${className}">${text}</h1>`
-          } else if (lower.includes('enter')) {
-            const type = lower.includes('password')
-              ? 'password'
-              : lower.includes('email')
+          } else if (isLabel && !isInputPlaceholder) {
+            element = `<label class="form-label ${className}">${text}</label>`
+          } else if (isInputPlaceholder) {
+            const type = lower.includes('email')
               ? 'email'
+              : lower.includes('password')
+              ? 'password'
               : 'text'
             element = `<input type="${type}" class="form-input ${className}" placeholder="${text}" />`
-          } else if (lower.includes('forgot')) {
+          } else if (isCheckbox) {
+            element = `<label class="remember-option ${className}">
+              <input type="checkbox" class="form-checkbox" />
+              ${text}
+            </label>`
+          } else if (isLink) {
             element = `<a href="#" class="form-link ${className}">${text}</a>`
-          } else if (['submit', 'login', 'reset'].includes(lower)) {
-            element = `<button class="form-button ${className}">${text}</button>`
           } else {
-            element = `<label class="form-label ${className}">${text}</label>`
+            element = `<p class="${className}">${text}</p>`
           }
           break
         }
 
         case 'RECTANGLE': {
-          const name = node.name?.toLowerCase() || ''
-          const looksLikeButton = name.includes('button') || node.children?.some(c => c.characters?.toLowerCase().includes('submit'))
-
-          if (looksLikeButton) {
-            const label = node.children?.find(c => c.type === 'TEXT')?.characters || 'Submit'
-            element = `<button class="form-button ${className}">${label}</button>`
-          } else {
-            element = `<div class="${className}"></div>`
-          }
+          // Treat it as a wrapper/container
+          const childrenHtml = node.children ? generateHtmlFromNodes(node.children) : ''
+          element = `<div class="${className} rectangle">${childrenHtml}</div>`
           break
         }
 
-        case 'ELLIPSE': {
-          element = `<div class="${className}"></div>`
+        case 'ELLIPSE':
+          element = `<div class="${className} ellipse"></div>`
           break
-        }
 
-        case 'IMAGE': {
-          const filename = `${node.id.split(':')[0]}.png`
-          element = `<img src="images/${filename}" class="${className}" alt="${node.name || 'Image'}" />`
+        case 'IMAGE':
+          element = `<img src="images/${node.id.split(':')[0]}.png" class="${className}" alt="${node.name || 'Image'}" />`
           break
-        }
 
         default:
           element = node.children ? generateHtmlFromNodes(node.children) : ''
@@ -191,6 +187,7 @@ export const generateHtmlFromNodes = (nodes) => {
     .join('\n')
 }
 
+
 export const generateCssFromStyles = (node) => {
   if (!node || !node.id || !node.type) return ''
 
@@ -198,120 +195,55 @@ export const generateCssFromStyles = (node) => {
   const baseClass = `${node.type.toLowerCase()}-${node.id.replace(/:/g, '-')}`
   const cssRules = []
 
-  // Dimensions and positioning
   if (node.absoluteBoundingBox) {
-    const { width, height, x, y } = node.absoluteBoundingBox
+    const { width, height } = node.absoluteBoundingBox
     if (width) cssRules.push(`width: ${width}px`)
     if (height) cssRules.push(`height: ${height}px`)
-    if (x !== undefined) cssRules.push(`left: ${x}px`)
-    if (y !== undefined) cssRules.push(`top: ${y}px`)
   }
 
-  // Flex layout
-  if (node.layoutMode) {
-    cssRules.push(`display: flex`)
-    cssRules.push(`flex-direction: ${node.layoutMode.toLowerCase()}`)
-    if (node.primaryAxisAlignItems)
-      cssRules.push(`justify-content: ${node.primaryAxisAlignItems.toLowerCase()}`)
-    if (node.counterAxisAlignItems)
-      cssRules.push(`align-items: ${node.counterAxisAlignItems.toLowerCase()}`)
-    if (node.itemSpacing)
-      cssRules.push(`gap: ${node.itemSpacing}px`)
-    if (node.paddingLeft) cssRules.push(`padding-left: ${node.paddingLeft}px`)
-    if (node.paddingRight) cssRules.push(`padding-right: ${node.paddingRight}px`)
-    if (node.paddingTop) cssRules.push(`padding-top: ${node.paddingTop}px`)
-    if (node.paddingBottom) cssRules.push(`padding-bottom: ${node.paddingBottom}px`)
-  }
-
-  // Background
-  if (node.fills && node.fills.length > 0) {
-    const visibleFills = node.fills.filter((f) => f.visible !== false)
-    if (visibleFills.length > 0) {
-      const fill = visibleFills[0]
-      if (fill.type === 'SOLID') {
-        cssRules.push(`background-color: ${rgbaFromColor(fill.color, fill.opacity)}`)
-      }
+  // Remove unwanted background for TEXT elements
+  if (node.type !== 'TEXT' && node.fills?.[0]?.visible !== false) {
+    const fill = node.fills?.[0]
+    if (fill && fill.type === 'SOLID') {
+      cssRules.push(`background-color: ${rgbaFromColor(fill.color, fill.opacity ?? 1)}`)
     }
   }
 
-  // Border
-  if (node.strokes && node.strokes.length > 0) {
+  // Borders
+  if (node.strokes?.length > 0 && node.strokeWeight) {
     const stroke = node.strokes[0]
     if (stroke.type === 'SOLID') {
-      cssRules.push(`border: ${node.strokeWeight || 1}px solid ${rgbaFromColor(stroke.color, stroke.opacity)}`)
+      cssRules.push(`border: ${node.strokeWeight}px solid ${rgbaFromColor(stroke.color, stroke.opacity ?? 1)}`)
     }
   }
 
-  // Radius
-  if (node.cornerRadius) {
+  // Rounded corners
+  if (typeof node.cornerRadius === 'number') {
     cssRules.push(`border-radius: ${node.cornerRadius}px`)
   }
 
-  // Effects
-  if (node.effects) {
-    node.effects.forEach((effect) => {
-      if (effect.type === 'DROP_SHADOW') {
-        const { offset, radius, color } = effect
-        cssRules.push(`box-shadow: ${offset.x}px ${offset.y}px ${radius}px ${rgbaFromColor(color)}`)
-      }
-    })
-  }
-
-  // Text styles
+  // Typography
   if (node.type === 'TEXT' && node.style) {
     const s = node.style
     if (s.fontFamily) cssRules.push(`font-family: "${s.fontFamily}"`)
     if (s.fontSize) cssRules.push(`font-size: ${s.fontSize}px`)
     if (s.fontWeight) cssRules.push(`font-weight: ${s.fontWeight}`)
-    if (s.letterSpacing) cssRules.push(`letter-spacing: ${s.letterSpacing}px`)
     if (s.lineHeightPx) cssRules.push(`line-height: ${s.lineHeightPx}px`)
-    if (s.textAlignHorizontal)
-      cssRules.push(`text-align: ${s.textAlignHorizontal.toLowerCase()}`)
+    if (s.textAlignHorizontal) cssRules.push(`text-align: ${s.textAlignHorizontal.toLowerCase()}`)
     if (s.fills?.[0]?.type === 'SOLID') {
       cssRules.push(`color: ${rgbaFromColor(s.fills[0].color, s.fills[0].opacity ?? 1)}`)
-    }
-
-    // Remove background from labels and links
-    const text = node.characters?.toLowerCase() || ''
-    if (text.includes('email') || text.includes('password')) {
-      cssRules.push(`background-color: transparent`)
-    }
-    if (text.includes('forgot')) {
-      cssRules.push(`background-color: transparent`)
-      cssRules.push(`color: #003966`)
-      cssRules.push(`text-decoration: none`)
-    }
-  }
-
-  // Opacity
-  if (typeof node.opacity === 'number') {
-    cssRules.push(`opacity: ${node.opacity}`)
-  }
-
-  // Blend mode
-  if (node.blendMode && node.blendMode !== 'NORMAL') {
-    cssRules.push(`mix-blend-mode: ${node.blendMode.toLowerCase()}`)
-  }
-
-  // Constraints
-  if (node.constraints) {
-    if (node.constraints.horizontal === 'CENTER') {
-      cssRules.push('margin-left: auto', 'margin-right: auto')
-    }
-    if (node.constraints.vertical === 'CENTER') {
-      cssRules.push('margin-top: auto', 'margin-bottom: auto')
     }
   }
 
   if (cssRules.length > 0) {
-    styles.push(`.${baseClass} { ${cssRules.join('; ')}; }`)
+    styles.push(`.${baseClass} { ${cssRules.join('; ')} }`)
   }
 
-  // Recurse through children
+  // Recurse for children
   if (node.children) {
-    node.children.forEach((child) => {
+    for (const child of node.children) {
       styles.push(generateCssFromStyles(child))
-    })
+    }
   }
 
   return styles.join('\n')
