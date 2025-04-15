@@ -1,7 +1,11 @@
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Button } from '@/components/ui/button'
-import { Copy } from 'lucide-react'
-import { useToast } from '@/hooks/use-toast'
+import React, { useState, useRef, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Card } from '@/components/ui/card';
+import { Code, Eye, Download, Copy, Check, Maximize2 } from 'lucide-react';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function Step3({
   outputType,
@@ -10,81 +14,251 @@ export default function Step3({
   isProcessing,
   handleDownload,
   generatedFiles,
+  selectedFrames,
+  frames
 }) {
-  const { toast } = useToast()
+  const [activeTab, setActiveTab] = useState('html');
+  const [previewTab, setPreviewTab] = useState('code');
+  const [selectedFrameId, setSelectedFrameId] = useState(selectedFrames[0] || '');
+  const [copied, setCopied] = useState({ html: false, css: false });
+  const iframeRef = useRef(null);
 
-  const handleCopy = (text) => {
-    navigator.clipboard
-      .writeText(text)
-      .then(() => {
-        toast({ title: 'Copied to clipboard' })
-      })
-      .catch((err) => {
-        console.error('Failed to copy: ', err)
-      })
-  }
+  // Get the selected frame data
+  const selectedFrame = frames.find(frame => frame.id === selectedFrameId);
+  const selectedFrameName = selectedFrame?.name || 'Frame';
+
+  // Update iframe content when files change, selected frame changes, or tab changes
+  useEffect(() => {
+    const updateIframe = () => {
+      if (iframeRef.current && generatedFiles[selectedFrameId]) {
+        const iframe = iframeRef.current;
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+
+        // Format HTML with proper indentation
+        const formattedHtml = generatedFiles[selectedFrameId].html
+          .replace(/></g, '>\n<')
+          .split('\n')
+          .map(line => line.trim())
+          .map((line, i, arr) => {
+            let indent = 0;
+            for (let j = 0; j < i; j++) {
+              if (arr[j].includes('<') && !arr[j].includes('</') && !arr[j].includes('/>')) indent++;
+              if (arr[j].includes('</')) indent--;
+            }
+            return '  '.repeat(indent) + line;
+          })
+          .join('\n');
+
+        // Format CSS with proper indentation
+        const formattedCss = generatedFiles[selectedFrameId].css
+          .replace(/\{/g, ' {\n  ')
+          .replace(/;/g, ';\n  ')
+          .replace(/}/g, '\n}\n')
+          .replace(/\s+}/g, '}')
+          .replace(/\n\s*\n/g, '\n');
+
+        // Create final HTML with formatted CSS
+        const htmlWithInlineCSS = formattedHtml.replace(
+          /<link rel="stylesheet" href=".*?\.css">/,
+          `<style>\n${formattedCss}\n</style>`
+        );
+
+        iframeDoc.open();
+        iframeDoc.write(htmlWithInlineCSS);
+        iframeDoc.close();
+      }
+    };
+
+    if (previewTab === 'preview') {
+      setTimeout(updateIframe, 50);
+    }
+  }, [generatedFiles, previewTab, selectedFrameId]);
+
+  // Handle copy to clipboard
+  const handleCopy = (type) => {
+    const textToCopy = type === 'html'
+      ? generatedFiles[selectedFrameId]?.html
+      : generatedFiles[selectedFrameId]?.css;
+
+    if (textToCopy) {
+      navigator.clipboard.writeText(textToCopy)
+        .then(() => {
+          setCopied({...copied, [type]: true});
+          setTimeout(() => setCopied({...copied, [type]: false}), 2000);
+        })
+        .catch(err => console.error('Failed to copy: ', err));
+    }
+  };
+
+  // Add fullscreen state
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const previewContainerRef = useRef(null);
+
+  // Add fullscreen handler
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      previewContainerRef.current?.requestFullscreen();
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen();
+      setIsFullscreen(false);
+    }
+  };
+
+  // Add fullscreen change listener
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
 
   return (
-    <div className="w-full max-w-2xl mx-auto">
-      <h2 className="text-2xl font-bold mb-6 text-center">Download Options</h2>
-      <Tabs
-        defaultValue={outputType}
-        onValueChange={(value) => setOutputType(value)}
-      >
-        <TabsList className="grid w-full grid-cols-3 mb-6">
-          <TabsTrigger value="html">HTML Only</TabsTrigger>
-          <TabsTrigger value="css">CSS Only</TabsTrigger>
-          <TabsTrigger value="both">HTML & CSS</TabsTrigger>
+    <div className="space-y-6">
+      <div className="text-center">
+        <h2 className="text-2xl font-bold mb-2">Download Options</h2>
+        <p className="text-muted-foreground">
+          Choose your output format and download the generated code.
+        </p>
+      </div>
+
+      {selectedFrames.length > 1 && (
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-2">Select Frame</label>
+          <Select value={selectedFrameId} onValueChange={setSelectedFrameId}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select a frame" />
+            </SelectTrigger>
+            <SelectContent>
+              {selectedFrames.map(frameId => {
+                const frame = frames.find(f => f.id === frameId);
+                return (
+                  <SelectItem key={frameId} value={frameId}>
+                    {frame?.name || frameId}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      <Tabs defaultValue="code" value={previewTab} onValueChange={setPreviewTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="code" className="flex items-center gap-2">
+            <Code size={16} /> Code
+          </TabsTrigger>
+          <TabsTrigger value="preview" className="flex items-center gap-2">
+            <Eye size={16} /> Preview
+          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="code" className="mt-4">
+          <Tabs defaultValue="html" value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="html">HTML</TabsTrigger>
+              <TabsTrigger value="css">CSS</TabsTrigger>
+            </TabsList>
+            <TabsContent value="html" className="mt-4">
+              <Card className="p-0 overflow-hidden relative">
+                <div className="absolute top-2 right-2 z-10">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleCopy('html')}
+                    className="h-8 w-8 rounded-full bg-background/90 backdrop-blur-sm"
+                  >
+                    {copied.html ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+                  </Button>
+                </div>
+                <SyntaxHighlighter
+                  language="html"
+                  style={vscDarkPlus}
+                  showLineNumbers
+                  customStyle={{ margin: 0, borderRadius: '0.5rem' }}
+                >
+                  {generatedFiles[selectedFrameId]?.html || '// No HTML generated yet'}
+                </SyntaxHighlighter>
+              </Card>
+            </TabsContent>
+            <TabsContent value="css" className="mt-4">
+              <Card className="p-0 overflow-hidden relative">
+                <div className="absolute top-2 right-2 z-10">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleCopy('css')}
+                    className="h-8 w-8 rounded-full bg-background/90 backdrop-blur-sm"
+                  >
+                    {copied.css ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+                  </Button>
+                </div>
+                <SyntaxHighlighter
+                  language="css"
+                  style={vscDarkPlus}
+                  showLineNumbers
+                  customStyle={{ margin: 0, borderRadius: '0.5rem' }}
+                >
+                  {generatedFiles[selectedFrameId]?.css || '/* No CSS generated yet */'}
+                </SyntaxHighlighter>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </TabsContent>
+
+        <TabsContent value="preview" className="mt-4">
+          <Card className="relative w-full overflow-hidden" ref={previewContainerRef}>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleFullscreen}
+              className="absolute top-[25px] right-[25px] h-10 w-10 rounded-full bg-gray-400"
+            >
+              <Maximize2 size={16} />
+            </Button>
+            <iframe
+              ref={iframeRef}
+              className={`w-full border-0 ${isFullscreen ? 'h-screen' : 'h-[600px]'}`}
+              title="Generated Code Preview"
+            />
+          </Card>
+        </TabsContent>
       </Tabs>
-      <div className="mt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
-        <Button
-          onClick={() => setStep(2)}
-          variant="outline"
-          disabled={isProcessing}
-        >
-          Back to Selection
+
+      <div className="space-y-4">
+        <div className="flex flex-col space-y-2">
+          <h3 className="text-lg font-medium">Output Format</h3>
+          <Tabs defaultValue="both" value={outputType} onValueChange={setOutputType}>
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="html">HTML Only</TabsTrigger>
+              <TabsTrigger value="css">CSS Only</TabsTrigger>
+              <TabsTrigger value="both">HTML & CSS</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+      </div>
+
+      <div className="flex justify-between">
+        <Button variant="outline" onClick={() => setStep(2)}>
+          Back
         </Button>
-        <Button onClick={handleDownload} disabled={isProcessing}>
-          {isProcessing ? 'Generating ZIP...' : 'Download ZIP'}
+        <Button
+          onClick={handleDownload}
+          disabled={isProcessing}
+          className="flex items-center gap-2"
+        >
+          {isProcessing ? 'Processing...' : (
+            <>
+              Download {selectedFrames.length > 1 ? `(${selectedFrames.length})` : ''}
+              <Download size={16} />
+            </>
+          )}
         </Button>
       </div>
-      <section>
-        <div className="mt-6">
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="text-lg font-semibold">HTML Preview</h3>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleCopy(generatedFiles.html)}
-              className="text-muted-foreground hover:text-primary"
-            >
-              <Copy className="h-4 w-4 mr-1" />
-              Copy
-            </Button>
-          </div>
-          <pre className="bg-muted p-4 rounded-md text-xs overflow-auto max-h-60">
-            <code>{generatedFiles.html}</code>
-          </pre>
-        </div>
-        <div className="mt-6">
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="text-lg font-semibold">CSS Preview</h3>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleCopy(generatedFiles.css)}
-              className="text-muted-foreground hover:text-primary"
-            >
-              <Copy className="h-4 w-4 mr-1" />
-              Copy
-            </Button>
-          </div>
-          <pre className="bg-muted p-4 rounded-md text-xs overflow-auto max-h-60">
-            <code>{generatedFiles.css}</code>
-          </pre>
-        </div>
-      </section>
     </div>
-  )
+  );
 }

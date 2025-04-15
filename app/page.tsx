@@ -17,6 +17,7 @@ import {
   rgbaFromColor,
   generateHtmlFromNodes,
   generateCssFromStyles,
+  enhanceComponentStyles,
 } from '@/lib/utils'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
@@ -130,17 +131,42 @@ export default function Home() {
     [toast]
   )
 
-  const handleProcessClick = () => {
+  const handleProcessClick = async () => {
     const fileKey = extractFileKey(figmaUrl)
     if (!fileKey) {
       toast({
-        title: 'Invalid Figma URL',
+        title: 'Invalid URL',
         description: 'Please enter a valid Figma file URL.',
         variant: 'destructive',
       })
-      return
+      return { success: false }
     }
-    fetchFigmaFile(fileKey)
+
+    try {
+      await fetchFigmaFile(fileKey)
+      // Wait for state update
+      await new Promise(resolve => setTimeout(resolve, 100))
+
+      return {
+        success: true,
+        data: {
+          name: figmaData?.name || 'Untitled',
+          components: figmaData?.components || 0,
+          styles: figmaData?.styles || 0,
+          thumbnailUrl: figmaData?.thumbnailUrl,
+          url: figmaUrl
+        }
+      }
+    } catch (error) {
+      console.error('Error processing Figma file:', error)
+      toast({
+        title: 'Error',
+        description:
+          'Failed to process Figma file. Please check the URL and try again.',
+        variant: 'destructive',
+      })
+      return { success: false }
+    }
   }
 
   const extractFrames = (documentNode) => {
@@ -200,6 +226,70 @@ export default function Home() {
     )
   }
 
+  const generateCodeForSelectedFrames = () => {
+    const selectedFrameNodes = frames.filter((frame) =>
+      selectedFrames.includes(frame.id)
+    )
+
+    if (!selectedFrameNodes.length) {
+      return {}
+    }
+
+    // Create a map to store HTML and CSS for each selected frame
+    const generatedFiles = {}
+
+    selectedFrameNodes.forEach((frame) => {
+      // Generate HTML for this specific frame
+      const htmlContent = `<div class="frame-wrapper">
+        ${generateHtmlFromNodes([frame])}
+      </div>`
+
+      // Generate CSS for this specific frame
+      let cssContent = generateCssFromStyles(frame)
+
+      // Enhance CSS with generic styles
+      cssContent = enhanceComponentStyles('generic', cssContent)
+
+      const fullHtml = `<!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>${frame.name || 'Figma Export'}</title>
+            <link rel="stylesheet" href="${frame.name
+              .replace(/\s+/g, '-')
+              .toLowerCase()}.css">
+        </head>
+        <body>
+            ${htmlContent}
+        </body>
+        </html>`
+
+      const fullCss = `
+        /* Reset and base styles */
+        * {
+          box-sizing: border-box;
+          margin: 0;
+          padding: 0;
+        }
+
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+          line-height: 1.5;
+          color: #333;
+        }
+
+        /* Generated styles */
+        ${cssContent}
+        `
+
+      // Store the generated files for this frame
+      generatedFiles[frame.id] = { html: fullHtml, css: fullCss }
+    })
+
+    return generatedFiles
+  }
+
   const handleProceedToOutput = () => {
     if (selectedFrames.length === 0) {
       toast({
@@ -211,194 +301,9 @@ export default function Home() {
       return
     }
 
-    const { html, css } = generateCodeForSelectedFrames()
-    setGeneratedFiles({ html, css })
+    const generatedFiles = generateCodeForSelectedFrames()
+    setGeneratedFiles(generatedFiles)
     setStep(3)
-  }
-
-  const generateCodeForSelectedFrames = () => {
-    const selectedFrameNodes = frames.filter((frame) =>
-      selectedFrames.includes(frame.id)
-    )
-
-    if (!selectedFrameNodes.length) {
-      return { html: '', css: '' }
-    }
-
-    const detectComponentType = (frame) => {
-      const name = frame.name.toLowerCase();
-      const hasChildren = frame.children && frame.children.length > 0;
-
-      // Check for login form
-      if (name.includes('login') || name.includes('signin')) {
-        return 'login-form';
-      }
-
-      // Add more component type detection as needed
-      // if (name.includes('card') || name.includes('product')) return 'product-card';
-      // if (name.includes('nav') || name.includes('header')) return 'navigation';
-
-      return 'generic'; // Default type
-    };
-
-    // Apply component-specific enhancements
-    // In the enhanceComponentStyles function
-    // Update the enhanceComponentStyles function to be more generic
-    const enhanceComponentStyles = (componentType, cssContent) => {
-    // Add generic form styles that work for all form types
-    return `${cssContent}
-
-    /* Generic Form Styles */
-    .frame-wrapper {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      padding: 20px;
-      background-color: #f5f5f5;
-    }
-
-    .form-title {
-      font-size: 24px;
-      font-weight: 600;
-      text-align: center;
-      margin-bottom: 24px;
-      color: #333;
-    }
-
-    .input-group {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-bottom: 16px;
-      width: 100%;
-    }
-
-    .input-group label {
-      font-size: 14px;
-      font-weight: 500;
-      color: #333;
-    }
-
-    .form-input {
-      padding: 10px 12px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 14px;
-      width: 100%;
-      background-color: white;
-    }
-
-    .form-input:focus {
-      border-color: #003966;
-      outline: none;
-    }
-
-    .form-checkbox {
-      width: 16px;
-      height: 16px;
-    }
-
-    .form-button {
-      background-color: #003966;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      padding: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      width: 100%;
-      margin-top: 8px;
-    }
-
-    .form-button:hover {
-      background-color: #002b4d;
-    }
-
-    .forgot-link {
-      color: #003966;
-      text-decoration: none;
-      font-size: 14px;
-      text-align: right;
-      display: block;
-    }
-
-    .forgot-link:hover {
-      text-decoration: underline;
-    }
-
-    .remember-option {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 14px;
-      cursor: pointer;
-    }
-
-    .required {
-      color: #e53935;
-      margin-left: 4px;
-    }`;
-    };
-
-    const htmlContent = selectedFrameNodes
-      .map((frame) => {
-        const componentType = detectComponentType(frame);
-
-        if (componentType === 'login-form') {
-          return `<div class="frame-wrapper">
-            ${generateHtmlFromNodes([frame])}
-          </div>`;
-        }
-
-        return `<div class="frame-wrapper">
-          ${generateHtmlFromNodes([frame])}
-        </div>`;
-      })
-      .join('\n\n');
-
-    let cssContent = selectedFrameNodes
-      .map((frame) => generateCssFromStyles(frame))
-      .join('\n\n');
-
-    // Enhance CSS based on detected component types
-    for (const frame of selectedFrameNodes) {
-      const componentType = detectComponentType(frame);
-      cssContent = enhanceComponentStyles(componentType, cssContent);
-    }
-
-    const fullHtml = `<!DOCTYPE html>
-      <html lang="en">
-      <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>${figmaData?.name || 'Figma Export'}</title>
-          <link rel="stylesheet" href="styles.css">
-      </head>
-      <body>
-          ${htmlContent}
-      </body>
-      </html>`
-
-    const fullCss = `
-      /* Reset and base styles */
-      * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-      }
-
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-        line-height: 1.5;
-        color: #333;
-      }
-
-      /* Generated styles */
-      ${cssContent}
-      `
-
-    return { html: fullHtml, css: fullCss }
   }
 
   const handleDownload = async () => {
@@ -422,27 +327,34 @@ export default function Home() {
     setIsProcessing(true)
 
     try {
-      const { html, css } = generateCodeForSelectedFrames()
-      setGeneratedFiles({ html, css })
-
       const zip = new JSZip()
 
-      if (outputType === 'html' || outputType === 'both') {
-        zip.file('index.html', html)
-      }
-      if (outputType === 'css' || outputType === 'both') {
-        zip.file('styles.css', css)
-      }
+      // Get the selected frame nodes
+      const selectedFrameNodes = frames.filter((frame) =>
+        selectedFrames.includes(frame.id)
+      )
 
+      // Add each frame's files to the zip
+      selectedFrameNodes.forEach((frame) => {
+        const frameFiles = generatedFiles[frame.id]
+        if (!frameFiles) return
+
+        const safeName = frame.name.replace(/\s+/g, '-').toLowerCase()
+
+        if (outputType === 'html' || outputType === 'both') {
+          zip.file(`${safeName}.html`, frameFiles.html)
+        }
+        if (outputType === 'css' || outputType === 'both') {
+          zip.file(`${safeName}.css`, frameFiles.css)
+        }
+      })
+
+      // Download images if needed
       if ((outputType === 'html' || outputType === 'both') && figmaUrl) {
         const fileKey = extractFileKey(figmaUrl)
         const accessToken = FIGMA_ACCESS_TOKEN
 
         if (fileKey && accessToken) {
-          const selectedFrameNodes = frames.filter((frame) =>
-            selectedFrames.includes(frame.id)
-          )
-
           toast({
             title: 'Downloading Images',
             description: 'Fetching image assets from Figma...',
@@ -531,6 +443,8 @@ export default function Home() {
             handleFrameSelection={handleFrameSelection}
             handleProceedToOutput={handleProceedToOutput}
             isProcessing={isProcessing}
+            figmaUrl={figmaUrl}
+            accessToken={FIGMA_ACCESS_TOKEN}
           />
         )
       case 3:
@@ -542,6 +456,8 @@ export default function Home() {
             isProcessing={isProcessing}
             handleDownload={handleDownload}
             generatedFiles={generatedFiles}
+            selectedFrames={selectedFrames}
+            frames={frames}
           />
         )
       default:

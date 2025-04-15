@@ -21,7 +21,7 @@ export default function Main({ step, renderStepContent, figmaData, isProcessing,
 
       <div>{renderStepContent()}</div>
 
-      {figmaData && (step === 1 || step === 2) && !isProcessing && (
+      {/* {figmaData && (step === 1 || step === 2) && !isProcessing && (
         <div className="mt-12 w-full max-w-md mx-auto">
           <Card className="p-6 shadow-md">
             <h3 className="text-lg font-semibold mb-4 border-b pb-2">
@@ -50,7 +50,7 @@ export default function Main({ step, renderStepContent, figmaData, isProcessing,
             )}
           </Card>
         </div>
-      )}
+      )} */}
 
       {step === 1 && (
         <div className="mt-20">
