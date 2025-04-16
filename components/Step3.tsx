@@ -1,11 +1,17 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Card } from '@/components/ui/card';
-import { Code, Eye, Download, Copy, Check, Maximize2 } from 'lucide-react';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import React, { useState, useRef, useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Card } from '@/components/ui/card'
+import { Code, Eye, Download, Copy, Check, Maximize2 } from 'lucide-react'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 export default function Step3({
   outputType,
@@ -15,107 +21,129 @@ export default function Step3({
   handleDownload,
   generatedFiles,
   selectedFrames,
-  frames
+  frames,
 }) {
-  const [activeTab, setActiveTab] = useState('html');
-  const [previewTab, setPreviewTab] = useState('code');
-  const [selectedFrameId, setSelectedFrameId] = useState(selectedFrames[0] || '');
-  const [copied, setCopied] = useState({ html: false, css: false });
-  const iframeRef = useRef(null);
+  const [activeTab, setActiveTab] = useState('html')
+  const [previewTab, setPreviewTab] = useState('code')
+  const [selectedFrameId, setSelectedFrameId] = useState(
+    selectedFrames[0] || ''
+  )
+  const [copied, setCopied] = useState({ html: false, css: false })
+  const iframeRef = useRef(null)
 
   // Get the selected frame data
-  const selectedFrame = frames.find(frame => frame.id === selectedFrameId);
-  const selectedFrameName = selectedFrame?.name || 'Frame';
+  const selectedFrame = frames.find((frame) => frame.id === selectedFrameId)
+  const selectedFrameName = selectedFrame?.name || 'Frame'
 
   // Update iframe content when files change, selected frame changes, or tab changes
   useEffect(() => {
     const updateIframe = () => {
       if (iframeRef.current && generatedFiles[selectedFrameId]) {
-        const iframe = iframeRef.current;
-        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+        const iframe = iframeRef.current
+        const iframeDoc =
+          iframe.contentDocument || iframe.contentWindow.document
 
         // Format HTML with proper indentation
         const formattedHtml = generatedFiles[selectedFrameId].html
           .replace(/></g, '>\n<')
           .split('\n')
-          .map(line => line.trim())
+          .map((line) => line.trim())
           .map((line, i, arr) => {
-            let indent = 0;
-            for (let j = 0; j < i; j++) {
-              if (arr[j].includes('<') && !arr[j].includes('</') && !arr[j].includes('/>')) indent++;
-              if (arr[j].includes('</')) indent--;
+            let indent = 0
+            if (i > 0) {
+              // Count opening tags before this line
+              for (let j = 0; j < i; j++) {
+                const prevLine = arr[j]
+                if (prevLine.match(/<[^/][^>]*[^/]>$/)) indent++
+                if (prevLine.match(/<\//)) indent--
+              }
+              // Adjust for self-closing line
+              if (line.match(/<[^>]+\/>/)) indent = Math.max(0, indent)
+              // Adjust for closing tag
+              if (line.match(/<\//)) indent = Math.max(0, indent - 1)
             }
-            return '  '.repeat(indent) + line;
+            return '  '.repeat(Math.max(0, indent)) + line
           })
-          .join('\n');
+          .join('\n')
 
         // Format CSS with proper indentation
         const formattedCss = generatedFiles[selectedFrameId].css
-          .replace(/\{/g, ' {\n  ')
-          .replace(/;/g, ';\n  ')
-          .replace(/}/g, '\n}\n')
-          .replace(/\s+}/g, '}')
-          .replace(/\n\s*\n/g, '\n');
+          .split('}')
+          .map((block) => {
+            if (!block.trim()) return ''
+            const [selector, rules] = block.split('{')
+            if (!rules) return ''
+            return `${selector.trim()} {\n${rules
+              .split(';')
+              .map((rule) => rule.trim())
+              .filter(Boolean)
+              .map((rule) => `  ${rule};`)
+              .join('\n')}\n}`
+          })
+          .filter(Boolean)
+          .join('\n\n')
 
         // Create final HTML with formatted CSS
         const htmlWithInlineCSS = formattedHtml.replace(
           /<link rel="stylesheet" href=".*?\.css">/,
           `<style>\n${formattedCss}\n</style>`
-        );
+        )
 
-        iframeDoc.open();
-        iframeDoc.write(htmlWithInlineCSS);
-        iframeDoc.close();
+        iframeDoc.open()
+        iframeDoc.write(htmlWithInlineCSS)
+        iframeDoc.close()
       }
-    };
+    }
 
     if (previewTab === 'preview') {
-      setTimeout(updateIframe, 50);
+      setTimeout(updateIframe, 50)
     }
-  }, [generatedFiles, previewTab, selectedFrameId]);
+  }, [generatedFiles, previewTab, selectedFrameId])
 
   // Handle copy to clipboard
   const handleCopy = (type) => {
-    const textToCopy = type === 'html'
-      ? generatedFiles[selectedFrameId]?.html
-      : generatedFiles[selectedFrameId]?.css;
+    const textToCopy =
+      type === 'html'
+        ? generatedFiles[selectedFrameId]?.html
+        : generatedFiles[selectedFrameId]?.css
 
     if (textToCopy) {
-      navigator.clipboard.writeText(textToCopy)
+      navigator.clipboard
+        .writeText(textToCopy)
         .then(() => {
-          setCopied({...copied, [type]: true});
-          setTimeout(() => setCopied({...copied, [type]: false}), 2000);
+          setCopied({ ...copied, [type]: true })
+          setTimeout(() => setCopied({ ...copied, [type]: false }), 2000)
         })
-        .catch(err => console.error('Failed to copy: ', err));
+        .catch((err) => console.error('Failed to copy: ', err))
     }
-  };
+  }
 
   // Add fullscreen state
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const previewContainerRef = useRef(null);
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const previewContainerRef = useRef(null)
 
   // Add fullscreen handler
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      previewContainerRef.current?.requestFullscreen();
-      setIsFullscreen(true);
+      previewContainerRef.current?.requestFullscreen()
+      setIsFullscreen(true)
     } else {
-      document.exitFullscreen();
-      setIsFullscreen(false);
+      document.exitFullscreen()
+      setIsFullscreen(false)
     }
-  };
+  }
 
   // Add fullscreen change listener
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
+      setIsFullscreen(!!document.fullscreenElement)
+    }
 
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
     return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-    };
-  }, []);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+    }
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -134,20 +162,25 @@ export default function Step3({
               <SelectValue placeholder="Select a frame" />
             </SelectTrigger>
             <SelectContent>
-              {selectedFrames.map(frameId => {
-                const frame = frames.find(f => f.id === frameId);
+              {selectedFrames.map((frameId) => {
+                const frame = frames.find((f) => f.id === frameId)
                 return (
                   <SelectItem key={frameId} value={frameId}>
                     {frame?.name || frameId}
                   </SelectItem>
-                );
+                )
               })}
             </SelectContent>
           </Select>
         </div>
       )}
 
-      <Tabs defaultValue="code" value={previewTab} onValueChange={setPreviewTab} className="w-full">
+      <Tabs
+        defaultValue="code"
+        value={previewTab}
+        onValueChange={setPreviewTab}
+        className="w-full"
+      >
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="code" className="flex items-center gap-2">
             <Code size={16} /> Code
@@ -158,7 +191,11 @@ export default function Step3({
         </TabsList>
 
         <TabsContent value="code" className="mt-4">
-          <Tabs defaultValue="html" value={activeTab} onValueChange={setActiveTab}>
+          <Tabs
+            defaultValue="html"
+            value={activeTab}
+            onValueChange={setActiveTab}
+          >
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="html">HTML</TabsTrigger>
               <TabsTrigger value="css">CSS</TabsTrigger>
@@ -172,7 +209,11 @@ export default function Step3({
                     onClick={() => handleCopy('html')}
                     className="h-8 w-8 rounded-full bg-background/90 backdrop-blur-sm"
                   >
-                    {copied.html ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+                    {copied.html ? (
+                      <Check size={16} className="text-green-500" />
+                    ) : (
+                      <Copy size={16} />
+                    )}
                   </Button>
                 </div>
                 <SyntaxHighlighter
@@ -181,7 +222,8 @@ export default function Step3({
                   showLineNumbers
                   customStyle={{ margin: 0, borderRadius: '0.5rem' }}
                 >
-                  {generatedFiles[selectedFrameId]?.html || '// No HTML generated yet'}
+                  {generatedFiles[selectedFrameId]?.html ||
+                    '// No HTML generated yet'}
                 </SyntaxHighlighter>
               </Card>
             </TabsContent>
@@ -194,7 +236,11 @@ export default function Step3({
                     onClick={() => handleCopy('css')}
                     className="h-8 w-8 rounded-full bg-background/90 backdrop-blur-sm"
                   >
-                    {copied.css ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+                    {copied.css ? (
+                      <Check size={16} className="text-green-500" />
+                    ) : (
+                      <Copy size={16} />
+                    )}
                   </Button>
                 </div>
                 <SyntaxHighlighter
@@ -203,7 +249,8 @@ export default function Step3({
                   showLineNumbers
                   customStyle={{ margin: 0, borderRadius: '0.5rem' }}
                 >
-                  {generatedFiles[selectedFrameId]?.css || '/* No CSS generated yet */'}
+                  {generatedFiles[selectedFrameId]?.css ||
+                    '/* No CSS generated yet */'}
                 </SyntaxHighlighter>
               </Card>
             </TabsContent>
@@ -211,7 +258,10 @@ export default function Step3({
         </TabsContent>
 
         <TabsContent value="preview" className="mt-4">
-          <Card className="relative w-full overflow-hidden" ref={previewContainerRef}>
+          <Card
+            className="relative w-full overflow-hidden"
+            ref={previewContainerRef}
+          >
             <Button
               variant="ghost"
               size="icon"
@@ -222,7 +272,9 @@ export default function Step3({
             </Button>
             <iframe
               ref={iframeRef}
-              className={`w-full border-0 ${isFullscreen ? 'h-screen' : 'h-[600px]'}`}
+              className={`w-full border-0 ${
+                isFullscreen ? 'h-screen' : 'h-[600px]'
+              }`}
               title="Generated Code Preview"
             />
           </Card>
@@ -232,7 +284,11 @@ export default function Step3({
       <div className="space-y-4">
         <div className="flex flex-col space-y-2">
           <h3 className="text-lg font-medium">Output Format</h3>
-          <Tabs defaultValue="both" value={outputType} onValueChange={setOutputType}>
+          <Tabs
+            defaultValue="both"
+            value={outputType}
+            onValueChange={setOutputType}
+          >
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="html">HTML Only</TabsTrigger>
               <TabsTrigger value="css">CSS Only</TabsTrigger>
@@ -251,14 +307,17 @@ export default function Step3({
           disabled={isProcessing}
           className="flex items-center gap-2"
         >
-          {isProcessing ? 'Processing...' : (
+          {isProcessing ? (
+            'Processing...'
+          ) : (
             <>
-              Download {selectedFrames.length > 1 ? `(${selectedFrames.length})` : ''}
+              Download{' '}
+              {selectedFrames.length > 1 ? `(${selectedFrames.length})` : ''}
               <Download size={16} />
             </>
           )}
         </Button>
       </div>
     </div>
-  );
+  )
 }

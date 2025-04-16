@@ -25,7 +25,7 @@ const isInputPlaceholder = (node) => {
   const text = node.characters?.toLowerCase() || '';
   return /enter|type|your|e\.g\./.test(text) && !/\*$/.test(node.characters || '');
 };
-
+0
 const isLabel = (node) => {
   if (node.type !== 'TEXT') return false;
   const text = node.characters?.toLowerCase() || '';
@@ -67,104 +67,107 @@ const isTitle = (node) => {
   return node.style?.fontSize >= 20 || (node.style?.fontSize >= 16 && node.style?.fontWeight >= 600 && !looksLikeButtonText);
 };
 
-export const generateHtmlFromNodes = (nodes) => {
-  const sortedNodes = [...nodes].sort((a, b) => {
-    const ay = a.absoluteBoundingBox?.y || 0;
-    const by = b.absoluteBoundingBox?.y || 0;
-    if (Math.abs(ay - by) < 8) {
-      const ax = a.absoluteBoundingBox?.x || 0;
-      const bx = b.absoluteBoundingBox?.x || 0;
-      return ax - bx;
-    }
-    return ay - by;
-  });
-
+export function generateHtmlFromNodes(nodes, isRoot = true) {
+  let html = '';
+  let hasMainContainer = false;
   let inputCounter = 0;
-  const elementsData = [];
 
-  sortedNodes.forEach((node, index) => {
-    let elementHtml = '';
-    let elementType = 'unknown';
-    const figmaId = node.id.replace(/[:;]/g, '-');
-    const baseClass = `${node.type.toLowerCase()}-${figmaId}`;
+  // Helper functions to detect node roles
+  const isLabel = (node) =>
+    node.type === 'TEXT' &&
+    /email|password|address|user|name/i.test(node.characters) &&
+    !/enter|remember|forgot|login|sign/i.test(node.characters);
 
-    switch (node.type) {
-      case 'TEXT': {
-        const text = node.characters?.trim() || '';
-        const uniqueId = `input-${++inputCounter}`;
+  const isPlaceholder = (node) =>
+    node.type === 'TEXT' &&
+    /enter|type|your/i.test(node.characters) &&
+    node.characters.length < 40;
 
-        if (isTitle(node)) {
-          const Tag = node.style?.fontSize >= 24 ? 'h1' : 'h2';
-          elementHtml = `<${Tag} class="form-title ${baseClass}">${text}</${Tag}>`;
-          elementType = 'title';
-        } else if (isLabel(node)) {
-          const nextNode = sortedNodes[index + 1];
-          const inputType = nextNode?.characters?.toLowerCase().includes('password') ? 'password' : 'email';
-          const inputFigId = nextNode?.id?.replace(/[:;]/g, '-') || '';
-          elementHtml = `<div class="input-group">
-              <label for="${uniqueId}" class="form-label ${baseClass}">${text.replace('*', '')}<span class="required">*</span></label>
-              <input type="${inputType}" id="${uniqueId}" class="form-input text-${inputFigId}" placeholder="${nextNode?.characters || ''}" required />
-            </div>`;
-          elementType = 'input-group';
-        } else if (isCheckboxLabel(node)) {
-          elementHtml = `<label class="form-checkbox-label ${baseClass}">
-              <input type="checkbox" class="form-checkbox" />
-              <span>${text}</span>
-            </label>`;
-          elementType = 'checkbox-label';
-        } else if (isLink(node)) {
-          elementHtml = `<a href="#" class="form-link ${baseClass}">${text}</a>`;
-          elementType = 'link';
-        } else if (isSubmitButton(node)) {
-          elementHtml = `<button type="submit" class="form-button ${baseClass}">${text}</button>`;
-          elementType = 'submit-button';
-        } else {
-          // Generic text element
-          elementHtml = `<p class="${baseClass}">${text}</p>`;
-          elementType = 'text';
-        }
-        break;
-      }
-      case 'RECTANGLE':
-      case 'ELLIPSE':
-      case 'POLYGON': {
-        elementHtml = `<div class="shape ${baseClass}"></div>`;
-        elementType = 'shape';
-        break;
-      }
-      case 'FRAME':
-      case 'GROUP':
-      case 'COMPONENT': {
-        const childrenHtml = node.children ? generateHtmlFromNodes(node.children) : '';
-        elementHtml = `<div class="container ${baseClass}">${childrenHtml}</div>`;
-        elementType = 'container';
-        break;
-      }
-      case 'VECTOR':
-      case 'BOOLEAN_OPERATION': {
-        elementHtml = `<div class="vector ${baseClass}"></div>`;
-        elementType = 'vector';
-        break;
-      }
-      case 'IMAGE': {
-        elementHtml = `<img src="images/${figmaId}.png" alt="${node.name || 'Image'}" class="image ${baseClass}" />`;
-        elementType = 'image';
-        break;
-      }
-      default:
-        if (node.children) {
-          elementHtml = generateHtmlFromNodes(node.children);
-        }
-        break;
+  const isCheckboxLabel = (node) =>
+    node.type === 'TEXT' && /remember/i.test(node.characters);
+
+  const isButton = (node) =>
+    node.type === 'TEXT' && /login|sign in|submit/i.test(node.characters);
+
+  const isLink = (node) =>
+    node.type === 'TEXT' && /forgot|register|sign up/i.test(node.characters);
+
+  const isTitle = (node) =>
+    node.type === 'TEXT' && /login|sign in|register|sign up/i.test(node.characters) && node.characters.length < 20;
+
+  // Main recursive rendering
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i];
+
+    // --- Semantic Title ---
+    if (isTitle(node)) {
+      html += `<h2 class="form-title">${node.characters}</h2>\n`;
+      continue;
     }
 
-    if (elementHtml) {
-      elementsData.push({ html: elementHtml, type: elementType, node });
+    // --- Label + Input + Placeholder ---
+    if (isLabel(node)) {
+      let placeholder = '';
+      // Look ahead for placeholder
+      if (i + 1 < nodes.length && isPlaceholder(nodes[i + 1])) {
+        placeholder = nodes[i + 1].characters;
+        i++;
+      }
+      const labelText = node.characters.replace('*', '').trim();
+      const inputType = /password/i.test(labelText) ? 'password' : 'email';
+      const uniqueId = `input-${++inputCounter}`;
+      html += `<div class="input-group">
+  <label for="${uniqueId}" class="form-label">${labelText}<span class="required">*</span></label>
+  <input type="${inputType}" id="${uniqueId}" class="form-input" placeholder="${placeholder}" required />
+</div>\n`;
+      continue;
     }
-  });
 
-  return elementsData.map((el) => el.html).join('\n');
-};
+    // --- Checkbox ---
+    if (isCheckboxLabel(node)) {
+      html += `<label class="form-checkbox-label">
+  <input type="checkbox" class="form-checkbox" />
+  <span>${node.characters}</span>
+</label>\n`;
+      continue;
+    }
+
+    // --- Button ---
+    if (isButton(node)) {
+      html += `<button type="submit" class="form-button">${node.characters}</button>\n`;
+      continue;
+    }
+
+    // --- Link ---
+    if (isLink(node)) {
+      html += `<a href="#" class="form-link">${node.characters}</a>\n`;
+      continue;
+    }
+
+    // --- Containers (FRAME/GROUP/COMPONENT) ---
+    if (
+      (node.type === 'FRAME' || node.type === 'GROUP' || node.type === 'COMPONENT') &&
+      node.children &&
+      node.children.length > 0
+    ) {
+      const childrenHtml = generateHtmlFromNodes(node.children, false);
+      if (!hasMainContainer && isRoot) {
+        html += `<form class="form-main-container">\n${childrenHtml}</form>\n`;
+        hasMainContainer = true;
+      } else {
+        html += `<div class="container">\n${childrenHtml}</div>\n`;
+      }
+      continue;
+    }
+
+    // --- Fallback: Recursively render children if present ---
+    if (node.children && node.children.length > 0) {
+      html += generateHtmlFromNodes(node.children, false);
+    }
+  }
+
+  return html;
+}
 
 export const generateCssFromStyles = (node) => {
   const styles = []
@@ -271,29 +274,32 @@ export const enhanceComponentStyles = (componentType, generatedCss) => {
 
   .frame-wrapper {
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    background-color: #f5f5f5;
+    background-color: #f7f7fa;
   }
 
   .form-main-container {
-    background-color: #ffffff;
-    padding: 32px;
-    border-radius: 12px;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+    background: #fff;
+    padding: 32px 32px 24px 32px;
+    border-radius: 16px;
+    box-shadow: 0 4px 32px 0 rgba(0,0,0,0.08);
     max-width: 400px;
     width: 100%;
     display: flex;
     flex-direction: column;
     gap: 20px;
+    align-items: stretch;
   }
 
   .form-title {
-    font-size: 24px;
-    font-weight: 600;
-    color: #333;
+    font-size: 22px;
+    font-weight: 700;
+    color: #111;
     text-align: center;
+    margin-bottom: 16px;
   }
 
   .input-group {
@@ -304,46 +310,49 @@ export const enhanceComponentStyles = (componentType, generatedCss) => {
 
   .form-label {
     font-size: 14px;
-    font-weight: 500;
-    color: #555;
+    font-weight: 600;
+    color: #222;
+    margin-bottom: 2px;
   }
 
   .form-input {
     padding: 10px 12px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 14px;
-    background-color: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 15px;
+    background: #fff;
+    transition: border 0.2s;
   }
 
   .form-input:focus {
-    border-color: #007bff;
+    border-color: #003966;
     outline: none;
-    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.2);
   }
 
   .form-button {
-    background-color: #003966;
-    color: white;
-    padding: 12px;
+    background: #003966;
+    color: #fff;
+    padding: 12px 0;
     border: none;
-    border-radius: 4px;
+    border-radius: 20px;
     font-size: 16px;
     font-weight: 600;
     cursor: pointer;
-    width: 100%;
-    text-align: center;
+    margin-top: 10px;
+    transition: background 0.2s;
+  }
+
+  .form-button:hover {
+    background: #00508a;
   }
 
   .form-link {
     color: #007bff;
     font-size: 13px;
-    text-decoration: none;
-    text-align: right;
-  }
-
-  .form-link:hover {
     text-decoration: underline;
+    text-align: center;
+    margin-top: 10px;
+    display: block;
   }
 
   .form-checkbox-label {
@@ -351,17 +360,18 @@ export const enhanceComponentStyles = (componentType, generatedCss) => {
     display: flex;
     align-items: center;
     gap: 6px;
-    color: #555;
+    color: #222;
+    margin-bottom: 8px;
   }
 
   .form-checkbox {
     width: 16px;
     height: 16px;
-    accent-color: #007bff;
+    accent-color: #003966;
   }
 
   .required {
-    color: red;
+    color: #e53935;
     margin-left: 2px;
   }
   `

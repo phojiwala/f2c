@@ -145,7 +145,7 @@ export default function Home() {
     try {
       await fetchFigmaFile(fileKey)
       // Wait for state update
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await new Promise((resolve) => setTimeout(resolve, 100))
 
       return {
         success: true,
@@ -154,8 +154,8 @@ export default function Home() {
           components: figmaData?.components || 0,
           styles: figmaData?.styles || 0,
           thumbnailUrl: figmaData?.thumbnailUrl,
-          url: figmaUrl
-        }
+          url: figmaUrl,
+        },
       }
     } catch (error) {
       console.error('Error processing Figma file:', error)
@@ -235,60 +235,49 @@ export default function Home() {
       return {}
     }
 
-    // Create a map to store HTML and CSS for each selected frame
     const generatedFiles = {}
 
     selectedFrameNodes.forEach((frame) => {
-      // Generate HTML for this specific frame
+      // Use improved HTML generator
       const htmlContent = `<div class="frame-wrapper">
-        ${generateHtmlFromNodes([frame])}
-      </div>`
+      ${generateHtmlFromNodes([frame])}
+      </div>`;
 
-      // Generate CSS for this specific frame
-      let cssContent = generateCssFromStyles(frame)
-
-      // Enhance CSS with generic styles
-      cssContent = enhanceComponentStyles('generic', cssContent)
+      let cssContent = generateCssFromStyles(frame);
+      cssContent = enhanceComponentStyles('generic', cssContent);
 
       const fullHtml = `<!DOCTYPE html>
-        <html lang="en">
+      <html lang="en">
         <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>${frame.name || 'Figma Export'}</title>
-            <link rel="stylesheet" href="${frame.name
-              .replace(/\s+/g, '-')
-              .toLowerCase()}.css">
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>${frame.name || 'Figma Export'}</title>
+          <link rel="stylesheet" href="${frame.name.replace(/\s+/g, '-').toLowerCase()}.css">
         </head>
         <body>
-            ${htmlContent}
+      ${htmlContent}
         </body>
-        </html>`
+      </html>`;
 
-      const fullCss = `
-        /* Reset and base styles */
-        * {
-          box-sizing: border-box;
-          margin: 0;
-          padding: 0;
-        }
+      const fullCss = `* {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
 
-        body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-          line-height: 1.5;
-          color: #333;
-        }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        line-height: 1.5;
+        color: #333;
+      }
 
-        /* Generated styles */
-        ${cssContent}
-        `
+      ${cssContent}`;
 
-      // Store the generated files for this frame
-      generatedFiles[frame.id] = { html: fullHtml, css: fullCss }
-    })
+      generatedFiles[frame.id] = { html: fullHtml, css: fullCss };
+    });
 
-    return generatedFiles
-  }
+    return generatedFiles;
+  };
 
   const handleProceedToOutput = () => {
     if (selectedFrames.length === 0) {
