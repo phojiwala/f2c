@@ -54,7 +54,7 @@ export default function Main({ step, renderStepContent, figmaData, isProcessing,
 
       {step === 1 && (
         <div className="mt-20">
-          <h2 className="text-center text-2xl font-semibold mb-8">
+          <h2 className="text-center text-2xl font-bold mb-8">
             How it Works
           </h2>
           <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">

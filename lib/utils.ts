@@ -1,171 +1,217 @@
-// updated utils.ts with improved HTML/CSS generation logic
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { clsx, type ClassValue } from 'clsx'
+import { twMerge } from 'tailwind-merge'
 
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
+  return twMerge(clsx(inputs))
 }
 
 export const toCSSUnit = (value) => {
-  if (value === undefined || value === null) return '0px';
-  return `${value}px`;
-};
+  if (value === undefined || value === null) return '0px'
+  return `${value}px`
+}
 
 export function rgbaFromColor(color, opacity = 1) {
-  if (!color) return 'rgba(0, 0, 0, 0)';
-  const r = Math.round(Math.max(0, Math.min(1, color.r || 0)) * 255);
-  const g = Math.round(Math.max(0, Math.min(1, color.g || 0)) * 255);
-  const b = Math.round(Math.max(0, Math.min(1, color.b || 0)) * 255);
-  const a = Math.max(0, Math.min(1, opacity ?? color.a ?? 1));
-  return `rgba(${r}, ${g}, ${b}, ${a.toFixed(2)})`;
+  if (!color) return 'rgba(0, 0, 0, 0)'
+  const r = Math.round(Math.max(0, Math.min(1, color.r || 0)) * 255)
+  const g = Math.round(Math.max(0, Math.min(1, color.g || 0)) * 255)
+  const b = Math.round(Math.max(0, Math.min(1, color.b || 0)) * 255)
+  const a = Math.max(0, Math.min(1, opacity ?? color.a ?? 1))
+  return `rgba(${r}, ${g}, ${b}, ${a.toFixed(2)})`
 }
 
 const isInputPlaceholder = (node) => {
-  if (node.type !== 'TEXT') return false;
-  const text = node.characters?.toLowerCase() || '';
-  return /enter|type|your|e\.g\./.test(text) && !/\*$/.test(node.characters || '');
-};
+  if (node.type !== 'TEXT') return false
+  const text = node.characters?.toLowerCase() || ''
+  return (
+    /enter|type|your|e\.g\./.test(text) && !/\*$/.test(node.characters || '')
+  )
+}
 0
 const isLabel = (node) => {
-  if (node.type !== 'TEXT') return false;
-  const text = node.characters?.toLowerCase() || '';
-  return /email|password|confirm|name|username|subject|message|phone/.test(text) && /\*$/.test(node.characters || '');
-};
+  if (node.type !== 'TEXT') return false
+  const text = node.characters?.toLowerCase() || ''
+  return (
+    /email|password|confirm|name|username|subject|message|phone/.test(text) &&
+    /\*$/.test(node.characters || '')
+  )
+}
 
 const isSubmitButton = (node) => {
-  if ((node.type === 'FRAME' || node.type === 'RECTANGLE') && node.children?.length === 1 && node.children[0].type === 'TEXT') {
-    const text = node.children[0].characters?.toLowerCase().trim() || '';
-    if (/^login$|^signin$|^signup$|^submit$|^register$|^send$|^continue$|^save$|^update$/.test(text)) {
-      return true;
+  if (
+    (node.type === 'FRAME' || node.type === 'RECTANGLE') &&
+    node.children?.length === 1 &&
+    node.children[0].type === 'TEXT'
+  ) {
+    const text = node.children[0].characters?.toLowerCase().trim() || ''
+    if (
+      /^login$|^signin$|^signup$|^submit$|^register$|^send$|^continue$|^save$|^update$/.test(
+        text
+      )
+    ) {
+      return true
     }
   }
   if (node.type === 'TEXT') {
-    const text = node.characters?.toLowerCase().trim() || '';
-    if (/^login$|^signin$|^signup$|^submit$|^register$|^send$|^continue$|^save$|^update$/.test(text) && node.fills?.[0]?.type === 'SOLID') {
-      return true;
+    const text = node.characters?.toLowerCase().trim() || ''
+    if (
+      /^login$|^signin$|^signup$|^submit$|^register$|^send$|^continue$|^save$|^update$/.test(
+        text
+      ) &&
+      node.fills?.[0]?.type === 'SOLID'
+    ) {
+      return true
     }
   }
-  return false;
-};
+  return false
+}
 
 const isCheckboxLabel = (node) => {
-  if (node.type !== 'TEXT') return false;
-  const text = node.characters?.toLowerCase() || '';
-  return /remember|agree|subscribe|i accept|keep me logged in/.test(text);
-};
+  if (node.type !== 'TEXT') return false
+  const text = node.characters?.toLowerCase() || ''
+  return /remember|agree|subscribe|i accept|keep me logged in/.test(text)
+}
 
 const isLink = (node) => {
-  if (node.type !== 'TEXT') return false;
-  const text = node.characters?.toLowerCase() || '';
-  return /forgot|reset|privacy|terms|learn more|click here|need help/.test(text);
-};
+  if (node.type !== 'TEXT') return false
+  const text = node.characters?.toLowerCase() || ''
+  return /forgot|reset|privacy|terms|learn more|click here|need help/.test(text)
+}
 
 const isTitle = (node) => {
-  if (node.type !== 'TEXT') return false;
-  const text = node.characters?.toLowerCase().trim() || '';
-  const looksLikeButtonText = /^login$|^signin$|^signup$|^submit$|^register$|^send$|^continue$|^save$|^update$/.test(text);
-  return node.style?.fontSize >= 20 || (node.style?.fontSize >= 16 && node.style?.fontWeight >= 600 && !looksLikeButtonText);
-};
+  if (node.type !== 'TEXT') return false
+  const text = node.characters?.toLowerCase().trim() || ''
+  const looksLikeButtonText =
+    /^login$|^signin$|^signup$|^submit$|^register$|^send$|^continue$|^save$|^update$/.test(
+      text
+    )
+  return (
+    node.style?.fontSize >= 20 ||
+    (node.style?.fontSize >= 16 &&
+      node.style?.fontWeight >= 600 &&
+      !looksLikeButtonText)
+  )
+}
 
 export function generateHtmlFromNodes(nodes, isRoot = true) {
-  let html = '';
-  let hasMainContainer = false;
-  let inputCounter = 0;
-
-  // Helper functions to detect node roles
-  const isLabel = (node) =>
-    node.type === 'TEXT' &&
-    /email|password|address|user|name/i.test(node.characters) &&
-    !/enter|remember|forgot|login|sign/i.test(node.characters);
-
-  const isPlaceholder = (node) =>
-    node.type === 'TEXT' &&
-    /enter|type|your/i.test(node.characters) &&
-    node.characters.length < 40;
-
-  const isCheckboxLabel = (node) =>
-    node.type === 'TEXT' && /remember/i.test(node.characters);
-
-  const isButton = (node) =>
-    node.type === 'TEXT' && /login|sign in|submit/i.test(node.characters);
-
-  const isLink = (node) =>
-    node.type === 'TEXT' && /forgot|register|sign up/i.test(node.characters);
-
-  const isTitle = (node) =>
-    node.type === 'TEXT' && /login|sign in|register|sign up/i.test(node.characters) && node.characters.length < 20;
-
-  // Main recursive rendering
-  for (let i = 0; i < nodes.length; i++) {
-    const node = nodes[i];
-
-    // --- Semantic Title ---
-    if (isTitle(node)) {
-      html += `<h2 class="form-title">${node.characters}</h2>\n`;
-      continue;
-    }
-
-    // --- Label + Input + Placeholder ---
-    if (isLabel(node)) {
-      let placeholder = '';
-      // Look ahead for placeholder
-      if (i + 1 < nodes.length && isPlaceholder(nodes[i + 1])) {
-        placeholder = nodes[i + 1].characters;
-        i++;
+  // Flatten all descendants into a single array for easier processing
+  function flattenNodes(nodes) {
+    let result = [];
+    for (const node of nodes) {
+      result.push(node);
+      if (node.children && node.children.length > 0) {
+        result = result.concat(flattenNodes(node.children));
       }
-      const labelText = node.characters.replace('*', '').trim();
-      const inputType = /password/i.test(labelText) ? 'password' : 'email';
-      const uniqueId = `input-${++inputCounter}`;
-      html += `<div class="input-group">
-  <label for="${uniqueId}" class="form-label">${labelText}<span class="required">*</span></label>
-  <input type="${inputType}" id="${uniqueId}" class="form-input" placeholder="${placeholder}" required />
-</div>\n`;
-      continue;
     }
-
-    // --- Checkbox ---
-    if (isCheckboxLabel(node)) {
-      html += `<label class="form-checkbox-label">
-  <input type="checkbox" class="form-checkbox" />
-  <span>${node.characters}</span>
-</label>\n`;
-      continue;
-    }
-
-    // --- Button ---
-    if (isButton(node)) {
-      html += `<button type="submit" class="form-button">${node.characters}</button>\n`;
-      continue;
-    }
-
-    // --- Link ---
-    if (isLink(node)) {
-      html += `<a href="#" class="form-link">${node.characters}</a>\n`;
-      continue;
-    }
-
-    // --- Containers (FRAME/GROUP/COMPONENT) ---
-    if (
-      (node.type === 'FRAME' || node.type === 'GROUP' || node.type === 'COMPONENT') &&
-      node.children &&
-      node.children.length > 0
-    ) {
-      const childrenHtml = generateHtmlFromNodes(node.children, false);
-      if (!hasMainContainer && isRoot) {
-        html += `<form class="form-main-container">\n${childrenHtml}</form>\n`;
-        hasMainContainer = true;
-      } else {
-        html += `<div class="container">\n${childrenHtml}</div>\n`;
-      }
-      continue;
-    }
-
-    // --- Fallback: Recursively render children if present ---
-    if (node.children && node.children.length > 0) {
-      html += generateHtmlFromNodes(node.children, false);
-    }
+    return result;
   }
 
+  const allNodes = flattenNodes(nodes);
+
+  // Helper: Find node by text content (case-insensitive, partial match)
+  const findNodeByText = (text) =>
+    allNodes.find(
+      (n) =>
+        n.type === 'TEXT' &&
+        n.characters &&
+        n.characters.toLowerCase().includes(text.toLowerCase())
+    );
+
+  // Helper: Find button node
+  const findButton = () =>
+    allNodes.find(
+      (n) =>
+        (n.type === 'FRAME' || n.type === 'RECTANGLE') &&
+        n.children &&
+        n.children[0] &&
+        n.children[0].type === 'TEXT' &&
+        /send|submit|save|continue|login|register/i.test(
+          n.children[0].characters
+        )
+    );
+
+  // Helper: Find all label nodes
+  const findLabelNodes = () =>
+    allNodes.filter(
+      (n) =>
+        n.type === 'TEXT' &&
+        /name|date|time|email|password/i.test(n.characters)
+    );
+
+  // Helper: Find input rectangles near a label
+  const findInputBox = (labelNode) => {
+    if (!labelNode || !labelNode.absoluteBoundingBox) return null;
+    const labelY = labelNode.absoluteBoundingBox.y;
+    return allNodes.find(
+      (n) =>
+        (n.type === 'RECTANGLE' || n.type === 'FRAME') &&
+        n.absoluteBoundingBox &&
+        Math.abs(n.absoluteBoundingBox.y - labelY) < 60 &&
+        n.absoluteBoundingBox.x > labelNode.absoluteBoundingBox.x
+    );
+  };
+
+  // Helper: Find subtitle node (not label, not button)
+  const findSubtitle = () =>
+    allNodes.find(
+      (n) =>
+        n.type === 'TEXT' &&
+        !/name|date|time|send|submit|save|continue|login|register/i.test(
+          n.characters
+        ) &&
+        n.style?.fontSize < 20
+    );
+
+  let html = `<form class="p-4 rounded-4 shadow bg-white" style="max-width:480px;margin:40px auto;">\n`;
+
+  // Title
+  const titleNode =
+    findNodeByText('users') ||
+    allNodes.find(
+      (n) =>
+        n.type === 'TEXT' &&
+        n.style &&
+        n.style.fontSize >= 20 &&
+        n.characters.length < 30
+    );
+  if (titleNode) {
+    html += `<h2 class="mb-4 fw-bold text-center">${titleNode.characters}</h2>\n`;
+  }
+
+  // Subtitle
+  const subtitleNode = findSubtitle();
+  if (subtitleNode) {
+    html += `<div class="mb-3">${subtitleNode.characters}</div>\n`;
+  }
+
+  // Fields
+  const labelNodes = findLabelNodes();
+  for (const labelNode of labelNodes) {
+    const labelText = labelNode.characters.replace('*', '').trim();
+    const isRequired = labelNode.characters.includes('*');
+    let inputType = 'text';
+    if (/date|time/i.test(labelText)) inputType = 'datetime-local';
+    if (/email/i.test(labelText)) inputType = 'email';
+    if (/password/i.test(labelText)) inputType = 'password';
+
+    html += `<div class="mb-3">\n`;
+    html += `<label class="form-label">${labelText}`;
+    if (isRequired) html += '<span class="text-danger">*</span>';
+    html += `</label>\n`;
+    html += `<input type="${inputType}" class="form-control" />\n`;
+    html += `</div>\n`;
+  }
+
+  // Button
+  const buttonNode = findButton();
+  if (buttonNode) {
+    const btnText =
+      buttonNode.children && buttonNode.children[0]
+        ? buttonNode.children[0].characters
+        : 'Send';
+    html += `<button type="submit" class="btn btn-primary w-100 rounded-4 fw-semibold" style="font-size:1.25rem;padding:.75rem 0;margin-top:1.5rem;">${btnText}</button>\n`;
+  }
+
+  html += `</form>\n`;
   return html;
 }
 
@@ -230,7 +276,6 @@ export const generateCssFromStyles = (node) => {
 }
 
 export const detectComponentType = (frame) => {
-  // ... (detectComponentType remains the same as previous version) ...
   const name = frame.name?.toLowerCase() || ''
   const children = frame.children || []
 
@@ -468,48 +513,48 @@ export const downloadImages = async (nodesToProcess, fileKey, accessToken) => {
 // Add this function to utils.ts
 export const fetchFrameThumbnails = async (fileKey, nodeIds, accessToken) => {
   if (!fileKey || !nodeIds || !nodeIds.length || !accessToken) {
-    return new Map();
+    return new Map()
   }
 
-  const thumbnailMap = new Map();
+  const thumbnailMap = new Map()
   try {
-    const idsString = nodeIds.join(',');
+    const idsString = nodeIds.join(',')
     const response = await fetch(
       `https://api.figma.com/v1/images/${fileKey}?ids=${idsString}&format=png&scale=1`,
       { headers: { 'X-Figma-Token': accessToken } }
-    );
+    )
 
     if (!response.ok) {
-      throw new Error(`Failed to get thumbnails (Status: ${response.status})`);
+      throw new Error(`Failed to get thumbnails (Status: ${response.status})`)
     }
 
-    const data = await response.json();
+    const data = await response.json()
     if (data.err) {
-      throw new Error(`Figma API error getting thumbnails: ${data.err}`);
+      throw new Error(`Figma API error getting thumbnails: ${data.err}`)
     }
 
     if (!data.images || Object.keys(data.images).length === 0) {
-      console.warn('Figma API returned no thumbnails for the requested frames.');
-      return thumbnailMap;
+      console.warn('Figma API returned no thumbnails for the requested frames.')
+      return thumbnailMap
     }
 
     // Map the image URLs to their respective node IDs
     Object.entries(data.images).forEach(([nodeId, imageUrl]) => {
       if (imageUrl) {
-        thumbnailMap.set(nodeId, imageUrl);
+        thumbnailMap.set(nodeId, imageUrl)
       }
-    });
+    })
   } catch (error) {
-    console.error('Failed to fetch thumbnails:', error);
+    console.error('Failed to fetch thumbnails:', error)
   }
 
-  return thumbnailMap;
-};
+  return thumbnailMap
+}
 
 export const formatDate = (date: Date): string => {
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: '2-digit',
-    year: 'numeric'
-  }).format(date);
-};
+    year: 'numeric',
+  }).format(date)
+}
