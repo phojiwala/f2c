@@ -26,7 +26,7 @@ const isInputPlaceholder = (node) => {
     /enter|type|your|e\.g\./.test(text) && !/\*$/.test(node.characters || '')
   )
 }
-0
+
 const isLabel = (node) => {
   if (node.type !== 'TEXT') return false
   const text = node.characters?.toLowerCase() || ''
@@ -107,108 +107,231 @@ export function generateHtmlFromNodes(nodes, isRoot = true) {
 
   const allNodes = flattenNodes(nodes);
 
+  // Get frame/container node (the parent)
+  const containerNode = nodes[0];
+  const containerName = containerNode?.name || '';
+
+  // Detect if this is a login form
+  const isLoginForm = /login/i.test(containerName);
+
+  // Detect if this is a notification form
+  const isNotificationForm = /notification|push/i.test(containerName);
+
   // Helper: Find node by text content (case-insensitive, partial match)
-  const findNodeByText = (text) =>
+  const findNodeByText = (text, exactMatch = false) =>
     allNodes.find(
       (n) =>
         n.type === 'TEXT' &&
         n.characters &&
-        n.characters.toLowerCase().includes(text.toLowerCase())
+        (exactMatch
+          ? n.characters.toLowerCase().trim() === text.toLowerCase().trim()
+          : n.characters.toLowerCase().includes(text.toLowerCase()))
     );
 
-  // Helper: Find button node
-  const findButton = () =>
-    allNodes.find(
-      (n) =>
-        (n.type === 'FRAME' || n.type === 'RECTANGLE') &&
-        n.children &&
-        n.children[0] &&
-        n.children[0].type === 'TEXT' &&
-        /send|submit|save|continue|login|register/i.test(
-          n.children[0].characters
-        )
-    );
-
-  // Helper: Find all label nodes
-  const findLabelNodes = () =>
+  // Helper: Find all nodes by text pattern
+  const findNodesByPattern = (pattern) =>
     allNodes.filter(
       (n) =>
         n.type === 'TEXT' &&
-        /name|date|time|email|password/i.test(n.characters)
+        n.characters &&
+        pattern.test(n.characters.toLowerCase())
     );
 
-  // Helper: Find input rectangles near a label
-  const findInputBox = (labelNode) => {
-    if (!labelNode || !labelNode.absoluteBoundingBox) return null;
-    const labelY = labelNode.absoluteBoundingBox.y;
-    return allNodes.find(
+  // Helper: Find button node
+  const findButton = () => {
+    // First try to find a rectangle with a text child that looks like a button
+    const buttonWithText = allNodes.find(
+      (n) =>
+        (n.type === 'RECTANGLE' || n.type === 'FRAME') &&
+        n.children &&
+        n.children.some(child =>
+          child.type === 'TEXT' &&
+          /send|submit|save|continue|login|register/i.test(child.characters)
+        )
+    );
+
+    if (buttonWithText) {
+      const textChild = buttonWithText.children.find(
+        child => child.type === 'TEXT'
+      );
+      return { node: buttonWithText, text: textChild?.characters || 'Submit' };
+    }
+
+    // If not found, look for standalone text that might be a button
+    const buttonText = allNodes.find(
+      (n) =>
+        n.type === 'TEXT' &&
+        /^(send|submit|save|continue|login|register)$/i.test(n.characters.trim())
+    );
+
+    if (buttonText) {
+      return { node: buttonText, text: buttonText.characters };
+    }
+
+    return null;
+  };
+
+  // Helper: Find all input fields (rectangles that look like inputs)
+  const findInputFields = () => {
+    return allNodes.filter(
       (n) =>
         (n.type === 'RECTANGLE' || n.type === 'FRAME') &&
         n.absoluteBoundingBox &&
-        Math.abs(n.absoluteBoundingBox.y - labelY) < 60 &&
-        n.absoluteBoundingBox.x > labelNode.absoluteBoundingBox.x
+        n.absoluteBoundingBox.width > 100 &&
+        n.absoluteBoundingBox.height >= 30 &&
+        n.absoluteBoundingBox.height <= 60 &&
+        (!n.children || !n.children.some(c =>
+          c.type === 'TEXT' &&
+          /send|submit|save|continue|login|register/i.test(c.characters)
+        ))
     );
   };
 
-  // Helper: Find subtitle node (not label, not button)
-  const findSubtitle = () =>
-    allNodes.find(
+  // Helper: Find label for an input field
+  const findLabelForInput = (inputNode) => {
+    if (!inputNode.absoluteBoundingBox) return null;
+
+    // Find text nodes above the input within a reasonable distance
+    const possibleLabels = allNodes.filter(
       (n) =>
         n.type === 'TEXT' &&
-        !/name|date|time|send|submit|save|continue|login|register/i.test(
-          n.characters
-        ) &&
-        n.style?.fontSize < 20
+        n.absoluteBoundingBox &&
+        n.absoluteBoundingBox.y < inputNode.absoluteBoundingBox.y &&
+        Math.abs(n.absoluteBoundingBox.y + n.absoluteBoundingBox.height - inputNode.absoluteBoundingBox.y) < 40 &&
+        Math.abs(n.absoluteBoundingBox.x - inputNode.absoluteBoundingBox.x) < 200
     );
 
-  let html = `<form class="p-4 rounded-4 shadow bg-white" style="max-width:480px;margin:40px auto;">\n`;
+    // Sort by proximity (closest first)
+    possibleLabels.sort((a, b) =>  
+      Math.abs(a.absoluteBoundingBox.y + a.absoluteBoundingBox.height - inputNode.absoluteBoundingBox.y) -
+      Math.abs(b.absoluteBoundingBox.y + b.absoluteBoundingBox.height - inputNode.absoluteBoundingBox.y)
+    );
 
-  // Title
-  const titleNode =
-    findNodeByText('users') ||
-    allNodes.find(
+    return possibleLabels[0] || null;
+  };
+
+  // Helper: Determine input type based on label text
+  const getInputTypeFromLabel = (labelText) => {
+    if (!labelText) return 'text';
+
+    const text = labelText.toLowerCase();
+    if (/password/i.test(text)) return 'password';
+    if (/email/i.test(text)) return 'email';
+    if (/date|time/i.test(text)) return 'datetime-local';
+    if (/message|description|comment/i.test(text)) return 'textarea';
+
+    return 'text';
+  };
+
+  // Helper: Find checkbox elements
+  const findCheckboxes = () => {
+    return allNodes.filter(
       (n) =>
-        n.type === 'TEXT' &&
-        n.style &&
-        n.style.fontSize >= 20 &&
-        n.characters.length < 30
+        (n.type === 'RECTANGLE' || n.type === 'VECTOR') &&
+        n.absoluteBoundingBox &&
+        n.absoluteBoundingBox.width <= 30 &&
+        n.absoluteBoundingBox.height <= 30
     );
+  };
+
+  // Start building the HTML
+  let html = '';
+
+  // Determine form style based on the design
+  const formClasses = isLoginForm
+    ? 'p-4 rounded-4 shadow bg-white'
+    : 'p-4 rounded-4 shadow bg-white';
+
+  const formStyle = isLoginForm
+    ? 'max-width:400px;margin:40px auto;'
+    : 'max-width:480px;margin:40px auto;';
+
+  html += `<form class="${formClasses}" style="${formStyle}">\n`;
+
+  // Title/Header
+  const titleNode = findNodeByText('users') ||
+                   findNodeByText('login', true) ||
+                   findNodeByText('add push notification') ||
+                   allNodes.find(
+                     (n) =>
+                       n.type === 'TEXT' &&
+                       n.style &&
+                       n.style.fontSize >= 20 &&
+                       n.characters.length < 30
+                   );
+
   if (titleNode) {
     html += `<h2 class="mb-4 fw-bold text-center">${titleNode.characters}</h2>\n`;
   }
 
-  // Subtitle
-  const subtitleNode = findSubtitle();
-  if (subtitleNode) {
-    html += `<div class="mb-3">${subtitleNode.characters}</div>\n`;
-  }
+  // Find all input fields
+  const inputFields = findInputFields();
+  const checkboxes = findCheckboxes();
 
-  // Fields
-  const labelNodes = findLabelNodes();
-  for (const labelNode of labelNodes) {
-    const labelText = labelNode.characters.replace('*', '').trim();
-    const isRequired = labelNode.characters.includes('*');
-    let inputType = 'text';
-    if (/date|time/i.test(labelText)) inputType = 'datetime-local';
-    if (/email/i.test(labelText)) inputType = 'email';
-    if (/password/i.test(labelText)) inputType = 'password';
+  // Process input fields
+  inputFields.forEach(inputField => {
+    const label = findLabelForInput(inputField);
+    const labelText = label ? label.characters : '';
+    const isRequired = labelText.includes('*');
+    const cleanLabelText = labelText.replace('*', '').trim();
+    const inputType = getInputTypeFromLabel(labelText);
 
     html += `<div class="mb-3">\n`;
-    html += `<label class="form-label">${labelText}`;
-    if (isRequired) html += '<span class="text-danger">*</span>';
-    html += `</label>\n`;
-    html += `<input type="${inputType}" class="form-control" />\n`;
+
+    if (label) {
+      html += `  <label class="form-label">${cleanLabelText}`;
+      if (isRequired) html += '<span class="text-danger">*</span>';
+      html += `</label>\n`;
+    }
+
+    if (inputType === 'textarea') {
+      html += `  <textarea class="form-control" placeholder="Type text here"></textarea>\n`;
+    } else {
+      const placeholder = inputType === 'datetime-local'
+        ? 'Select date & time'
+        : inputType === 'password'
+          ? 'Enter password'
+          : inputType === 'email'
+            ? 'Enter email address'
+            : 'Type name here';
+
+      html += `  <input type="${inputType}" class="form-control" placeholder="${placeholder}" />\n`;
+    }
+
     html += `</div>\n`;
+  });
+
+  // Process checkboxes
+  checkboxes.forEach(checkbox => {
+    const label = findLabelForInput(checkbox);
+    const labelText = label ? label.characters : 'Remember me';
+
+    html += `<div class="form-check mb-3">\n`;
+    html += `  <input class="form-check-input" type="checkbox" />\n`;
+    html += `  <label class="form-check-label">${labelText}</label>\n`;
+    html += `</div>\n`;
+  });
+
+  // Find "Forgot Password" link for login forms
+  if (isLoginForm) {
+    const forgotPasswordNode = findNodeByText('forgot password');
+    if (forgotPasswordNode) {
+      html += `<div class="mb-3 text-center">\n`;
+      html += `  <a href="#" class="text-decoration-none">Forgot Password?</a>\n`;
+      html += `</div>\n`;
+    }
   }
 
   // Button
-  const buttonNode = findButton();
-  if (buttonNode) {
-    const btnText =
-      buttonNode.children && buttonNode.children[0]
-        ? buttonNode.children[0].characters
-        : 'Send';
-    html += `<button type="submit" class="btn btn-primary w-100 rounded-4 fw-semibold" style="font-size:1.25rem;padding:.75rem 0;margin-top:1.5rem;">${btnText}</button>\n`;
+  const buttonInfo = findButton();
+  if (buttonInfo) {
+    const buttonStyle = isLoginForm
+      ? 'btn-primary w-100 rounded-pill fw-semibold py-2'
+      : 'btn-primary w-100 rounded-4 fw-semibold py-3';
+
+    const buttonMargin = isLoginForm ? 'mt-3' : 'mt-4';
+
+    html += `<button type="submit" class="btn ${buttonStyle} ${buttonMargin}" style="font-size:1.1rem;">${buttonInfo.text}</button>\n`;
   }
 
   html += `</form>\n`;

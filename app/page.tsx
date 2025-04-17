@@ -239,9 +239,7 @@ export default function Home() {
 
     selectedFrameNodes.forEach((frame) => {
       // Use improved HTML generator
-      const htmlContent = `<div class="frame-wrapper">
-      ${generateHtmlFromNodes([frame])}
-      </div>`;
+      const htmlContent = generateHtmlFromNodes([frame]);
 
       let cssContent = generateCssFromStyles(frame);
       cssContent = enhanceComponentStyles('generic', cssContent);
@@ -253,7 +251,15 @@ export default function Home() {
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>${frame.name || 'Figma Export'}</title>
           <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-SgOJa3DmI69IUzQ2PVdRZhwQ+dy64/BUtbMJw1MZ8t5HZApcHrRKUc4W0kG879m7" crossorigin="anonymous">
-          <link rel="stylesheet" href="${frame.name.replace(/\s+/g, '-').toLowerCase()}.css">
+          <style>
+            body {
+              background-color: #f7f7fa;
+              min-height: 100vh;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+          </style>
         </head>
         <body>
           ${htmlContent}
@@ -271,6 +277,7 @@ export default function Home() {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
         line-height: 1.5;
         color: #333;
+        background-color: #f7f7fa;
       }
 
       ${cssContent}`;
