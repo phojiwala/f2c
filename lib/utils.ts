@@ -191,6 +191,16 @@ export function generateHtmlFromNodes(nodes, isRoot = true) {
   const findLabelForInput = (inputNode) => {
     if (!inputNode.absoluteBoundingBox) return null;
 
+    // Find top-level image/logo node above the form (highest Y, centered)
+    const logoNode = allNodes.find(
+      (n) =>
+        (n.type === 'IMAGE' || n.type === 'VECTOR' || n.type === 'FRAME') &&
+        n.absoluteBoundingBox &&
+        n.absoluteBoundingBox.y < (allNodes.find(isTitle)?.absoluteBoundingBox?.y || Infinity) &&
+        n.absoluteBoundingBox.width > 40 && // avoid tiny icons
+        n.absoluteBoundingBox.height > 40
+    );
+
     // Find text nodes above the input within a reasonable distance
     const possibleLabels = allNodes.filter(
       (n) =>
@@ -202,7 +212,7 @@ export function generateHtmlFromNodes(nodes, isRoot = true) {
     );
 
     // Sort by proximity (closest first)
-    possibleLabels.sort((a, b) =>  
+    possibleLabels.sort((a, b) =>
       Math.abs(a.absoluteBoundingBox.y + a.absoluteBoundingBox.height - inputNode.absoluteBoundingBox.y) -
       Math.abs(b.absoluteBoundingBox.y + b.absoluteBoundingBox.height - inputNode.absoluteBoundingBox.y)
     );
@@ -246,8 +256,6 @@ export function generateHtmlFromNodes(nodes, isRoot = true) {
     ? 'max-width:400px;margin:40px auto;'
     : 'max-width:480px;margin:40px auto;';
 
-  html += `<form class="${formClasses}" style="${formStyle}">\n`;
-
   // Title/Header
   const titleNode = findNodeByText('users') ||
                    findNodeByText('login', true) ||
@@ -260,56 +268,87 @@ export function generateHtmlFromNodes(nodes, isRoot = true) {
                        n.characters.length < 30
                    );
 
+  // Only use IMAGE node for logo (not VECTOR/FRAME), and only if it exists
+  const logoNode = allNodes.find(
+    (n) =>
+      n.type === 'IMAGE' &&
+      n.absoluteBoundingBox &&
+      titleNode &&
+      n.absoluteBoundingBox.y + n.absoluteBoundingBox.height < titleNode.absoluteBoundingBox.y &&
+      n.absoluteBoundingBox.width > 40 &&
+      n.absoluteBoundingBox.height > 40
+  );
+
+  if (logoNode) {
+    const logoFilename = `${logoNode.id.split(':')[0]}.png`;
+    html += `<div style="text-align:center;margin-bottom:24px;">\n`;
+    html += `  <img src="images/${logoFilename}" alt="Logo" style="max-width:160px;max-height:120px;object-fit:contain;" />\n`;
+    html += `</div>\n`;
+  }
+
+  html += `<form class="${formClasses}" style="${formStyle}">\n`;
+
   if (titleNode) {
     html += `<h2 class="mb-4 fw-bold text-center">${titleNode.characters}</h2>\n`;
   }
 
   // Find all input fields
   const inputFields = findInputFields();
-  const checkboxes = findCheckboxes();
 
-  // Process input fields
-  inputFields.forEach(inputField => {
+  // Only render email and password fields for login forms
+  const filteredInputs = isLoginForm
+    ? inputFields.filter(inputField => {
+        const label = findLabelForInput(inputField);
+        const labelText = label ? label.characters.toLowerCase() : '';
+        return labelText.includes('email') || labelText.includes('password');
+      })
+    : inputFields;
+
+  filteredInputs.forEach(inputField => {
     const label = findLabelForInput(inputField);
-    const labelText = label ? label.characters : '';
+    if (!label) return; // Only render if label exists
+    const labelText = label.characters;
     const isRequired = labelText.includes('*');
     const cleanLabelText = labelText.replace('*', '').trim();
     const inputType = getInputTypeFromLabel(labelText);
 
     html += `<div class="mb-3">\n`;
 
-    if (label) {
-      html += `  <label class="form-label">${cleanLabelText}`;
-      if (isRequired) html += '<span class="text-danger">*</span>';
-      html += `</label>\n`;
-    }
+    html += `  <label class="form-label">${cleanLabelText}`;
+    if (isRequired) html += '<span class="text-danger">*</span>';
+    html += `</label>\n`;
+
+    const placeholder = inputType === 'datetime-local'
+      ? 'Select date & time'
+      : inputType === 'password'
+        ? 'Enter password'
+        : inputType === 'email'
+          ? 'Enter email address'
+          : '';
 
     if (inputType === 'textarea') {
       html += `  <textarea class="form-control" placeholder="Type text here"></textarea>\n`;
     } else {
-      const placeholder = inputType === 'datetime-local'
-        ? 'Select date & time'
-        : inputType === 'password'
-          ? 'Enter password'
-          : inputType === 'email'
-            ? 'Enter email address'
-            : 'Type name here';
-
       html += `  <input type="${inputType}" class="form-control" placeholder="${placeholder}" />\n`;
     }
 
     html += `</div>\n`;
   });
 
-  // Process checkboxes
+  // Only render one "Remember me" checkbox if present
+  const checkboxes = findCheckboxes();
+  let renderedRememberMe = false;
   checkboxes.forEach(checkbox => {
+    if (renderedRememberMe) return;
     const label = findLabelForInput(checkbox);
-    const labelText = label ? label.characters : 'Remember me';
-
-    html += `<div class="form-check mb-3">\n`;
-    html += `  <input class="form-check-input" type="checkbox" />\n`;
-    html += `  <label class="form-check-label">${labelText}</label>\n`;
-    html += `</div>\n`;
+    const labelText = label ? label.characters.toLowerCase() : '';
+    if (labelText.includes('remember')) {
+      html += `<div class="form-check mb-3">\n`;
+      html += `  <input class="form-check-input" type="checkbox" />\n`;
+      html += `  <label class="form-check-label">${label.characters}</label>\n`;
+      html += `</div>\n`;
+      renderedRememberMe = true;
+    }
   });
 
   // Find "Forgot Password" link for login forms
