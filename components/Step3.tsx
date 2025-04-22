@@ -266,7 +266,7 @@ export default function Step3({
               variant="ghost"
               size="icon"
               onClick={toggleFullscreen}
-              className="absolute top-[25px] right-[25px] h-10 w-10 rounded-full bg-gray-400"
+              className="absolute top-5 right-5 h-8 w-8 rounded-full bg-gray-400"
             >
               <Maximize2 size={16} />
             </Button>

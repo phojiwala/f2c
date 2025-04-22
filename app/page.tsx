@@ -244,6 +244,7 @@ export default function Home() {
       let cssContent = generateCssFromStyles(frame);
       cssContent = enhanceComponentStyles('generic', cssContent);
 
+      const isLoginForm = /login/i.test(frame.name || '');
       const fullHtml = `<!DOCTYPE html>
       <html lang="en">
         <head>
@@ -255,9 +256,7 @@ export default function Home() {
             body {
               background-color: #f7f7fa;
               min-height: 100vh;
-              display: flex;
-              align-items: center;
-              justify-content: center;
+              ${isLoginForm ? 'display: flex; align-items: center; justify-content: center;' : ''}
             }
           </style>
         </head>
