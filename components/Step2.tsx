@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { fetchFrameThumbnails } from '@/lib/utils'
+import { fetchFrameThumbnails } from '@/lib/figma-api'
 import { useToast } from '@/hooks/use-toast'
 
 export default function Step2({

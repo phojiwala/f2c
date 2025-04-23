@@ -11,21 +11,16 @@ import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 import { useToast } from '@/hooks/use-toast'
 import FeatureCard from '@/components/FeatureCard'
-import {
-  downloadImages,
-  toCSSUnit,
-  rgbaFromColor,
-  generateHtmlFromNodes,
-  generateCssFromStyles,
-  enhanceComponentStyles,
-  detectComponentType,
-} from '@/lib/utils'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import Main from '@/components/Main'
 import Step1 from '@/components/Step1'
 import Step2 from '@/components/Step2'
 import Step3 from '@/components/Step3'
+import { generateHtmlFromNodes } from '@/lib/html-generator'
+import { downloadImages } from '@/lib/figma-api'
+import { enhanceComponentStyles, generateCssFromStyles } from '@/lib/css-generator'
+import { detectComponentType } from '@/lib/utils'
 
 export default function Home() {
   const [figmaData, setFigmaData] = useState(null)
@@ -248,6 +243,7 @@ export default function Home() {
       const componentType = detectComponentType(frame)
       const shouldCenter = componentType === 'login-form'
 
+      // In your page.tsx file, make sure the fullHtml template includes Bootstrap Icons
       const fullHtml = `<!DOCTYPE html>
       <html lang="en">
         <head>
@@ -255,9 +251,10 @@ export default function Home() {
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>${frame.name || 'Figma Export'}</title>
           <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-SgOJa3DmI69IUzQ2PVdRZhwQ+dy64/BUtbMJw1MZ8t5HZApcHrRKUc4W0kG879m7" crossorigin="anonymous">
+          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
           <style>
             body {
-              background-color: #f7f7fa;
+              background-color: ${componentType === 'login-form' ? '#f7f7fa' : '#fff'};
               min-height: 100vh;
               ${
                 shouldCenter
