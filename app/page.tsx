@@ -18,6 +18,7 @@ import {
   generateHtmlFromNodes,
   generateCssFromStyles,
   enhanceComponentStyles,
+  detectComponentType,
 } from '@/lib/utils'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
@@ -239,12 +240,14 @@ export default function Home() {
 
     selectedFrameNodes.forEach((frame) => {
       // Use improved HTML generator
-      const htmlContent = generateHtmlFromNodes([frame]);
+      const htmlContent = generateHtmlFromNodes([frame])
 
-      let cssContent = generateCssFromStyles(frame);
-      cssContent = enhanceComponentStyles('generic', cssContent);
+      let cssContent = generateCssFromStyles(frame)
+      cssContent = enhanceComponentStyles('generic', cssContent)
 
-      const isLoginForm = /login/i.test(frame.name || '');
+      const componentType = detectComponentType(frame)
+      const shouldCenter = componentType === 'login-form'
+
       const fullHtml = `<!DOCTYPE html>
       <html lang="en">
         <head>
@@ -256,7 +259,11 @@ export default function Home() {
             body {
               background-color: #f7f7fa;
               min-height: 100vh;
-              ${isLoginForm ? 'display: flex; align-items: center; justify-content: center;' : ''}
+              ${
+                shouldCenter
+                  ? 'display: flex; align-items: center; justify-content: center;'
+                  : ''
+              }
             }
           </style>
         </head>
@@ -264,7 +271,7 @@ export default function Home() {
           ${htmlContent}
           <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/js/bootstrap.bundle.min.js" integrity="sha384-k6d4wzSIapyDyv1kpU366/PK5hCdSbCRGRCMv+eplOQJWyd1fbcAu9OCUj5zNLiq" crossorigin="anonymous"></script>
         </body>
-      </html>`;
+      </html>`
 
       const fullCss = `* {
         box-sizing: border-box;
@@ -279,13 +286,13 @@ export default function Home() {
         background-color: #f7f7fa;
       }
 
-      ${cssContent}`;
+      ${cssContent}`
 
-      generatedFiles[frame.id] = { html: fullHtml, css: fullCss };
-    });
+      generatedFiles[frame.id] = { html: fullHtml, css: fullCss }
+    })
 
-    return generatedFiles;
-  };
+    return generatedFiles
+  }
 
   const handleProceedToOutput = () => {
     if (selectedFrames.length === 0) {
