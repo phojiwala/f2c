@@ -250,11 +250,11 @@ export function generateHtmlFromNodes(nodes, isRoot = true) {
   // Determine form style based on the design
   const formClasses = isLoginForm
     ? 'p-4 rounded-4 shadow bg-white'
-    : 'p-4 rounded-4 shadow bg-white';
+    : '';
 
   const formStyle = isLoginForm
     ? 'max-width:400px;margin:40px auto;'
-    : 'max-width:480px;margin:40px auto;';
+    : '';
 
   // Title/Header
   const titleNode = findNodeByText('users') ||
