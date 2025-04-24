@@ -38,84 +38,127 @@ function detectBootstrapComponent(node) {
 
 function detectTabs(nodes) {
   const tabCandidates = nodes.filter(
-    n =>
+    (n) =>
       n.type === 'TEXT' &&
       n.absoluteBoundingBox &&
       n.absoluteBoundingBox.y < 200 &&
       n.characters.length < 15
-  );
+  )
   if (tabCandidates.length >= 2) {
-    const yVals = tabCandidates.map(n => n.absoluteBoundingBox.y);
-    const ySpread = Math.max(...yVals) - Math.min(...yVals);
-    if (ySpread < 40) return tabCandidates;
+    const yVals = tabCandidates.map((n) => n.absoluteBoundingBox.y)
+    const ySpread = Math.max(...yVals) - Math.min(...yVals)
+    if (ySpread < 40) return tabCandidates
   }
-  return [];
+  return []
 }
 
 function detectSearchInput(nodes) {
-  return nodes.find(
-    n =>
-      (n.type === 'RECTANGLE' || n.type === 'FRAME') &&
-      n.absoluteBoundingBox &&
-      n.absoluteBoundingBox.width > 200 &&
-      n.absoluteBoundingBox.y < 150
-  );
+  return (
+    nodes.find(
+      (n) =>
+        (n.type === 'RECTANGLE' || n.type === 'FRAME') &&
+        n.absoluteBoundingBox &&
+        n.absoluteBoundingBox.width > 200 &&
+        (n.absoluteBoundingBox.y < 150 ||
+          // Look for search text
+          (n.children &&
+            n.children.some(
+              (child) =>
+                child.type === 'TEXT' && /search/i.test(child.characters || '')
+            )))
+    ) ||
+    // Also look for a search icon or text
+    nodes.find((n) => n.type === 'TEXT' && /search/i.test(n.characters || ''))
+  )
 }
 
 function detectTable(nodes) {
-  // More robust table detection
+  // Look for table frames with header-like text
   const tableFrames = nodes.filter(
-    n =>
+    (n) =>
       (n.type === 'FRAME' || n.type === 'GROUP') &&
       n.children &&
       n.children.length > 5 &&
-      // Look for header-like text nodes
       n.children.some(
-        child =>
+        (child) =>
           child.type === 'TEXT' &&
-          /no\.|profile|photo|name|email|registered|action/i.test(child.characters)
+          /no\.|profile|photo|name|email|registered|action/i.test(
+            child.characters
+          )
       )
-  );
-  
-  // Sort by size and complexity - larger frames with more children are more likely to be tables
+  )
+
+  // If we found potential tables, return the one with the most children
   if (tableFrames.length > 0) {
-    return tableFrames.sort((a, b) => 
-      (b.children?.length || 0) - (a.children?.length || 0)
-    )[0];
+    return tableFrames.sort(
+      (a, b) => (b.children?.length || 0) - (a.children?.length || 0)
+    )[0]
   }
-  
-  return null;
+
+  // Fallback: look for a collection of text nodes that might form a table
+  const headerTexts = nodes.filter(
+    (n) =>
+      n.type === 'TEXT' &&
+      /no\.|profile|photo|name|email|registered|action/i.test(n.characters)
+  )
+
+  if (headerTexts.length >= 3) {
+    // Find the parent that contains these headers
+    const parents = nodes.filter(
+      (n) =>
+        n.children &&
+        n.children.some((child) =>
+          headerTexts.some((header) => header.id === child.id)
+        )
+    )
+
+    if (parents.length > 0) {
+      return parents[0]
+    }
+  }
+
+  return null
 }
 
-// Add a function to detect if we're looking at a notification form
 function detectNotificationForm(nodes) {
   const notificationTextLabel = nodes.find(
-    n => 
-      n.type === 'TEXT' && 
-      n.characters && 
+    (n) =>
+      n.type === 'TEXT' &&
+      n.characters &&
       /notification text/i.test(n.characters)
-  );
-  
+  )
+
   const notificationTypeLabel = nodes.find(
-    n => 
-      n.type === 'TEXT' && 
-      n.characters && 
+    (n) =>
+      n.type === 'TEXT' &&
+      n.characters &&
       /notification type/i.test(n.characters)
+  )
+
+  return notificationTextLabel && notificationTypeLabel
+}
+
+// Add this function to detect login-related screens
+function detectLoginRelatedScreen(nodes) {
+  // Look for login, forgot password, or change password text
+  return nodes.find(
+    n =>
+      n.type === 'TEXT' &&
+      n.characters &&
+      /login|forgot password|change password|reset password/i.test(n.characters)
   );
-  
-  return notificationTextLabel && notificationTypeLabel;
 }
 
 export function generateHtmlFromNodes(nodes, isRoot = true) {
   function flattenNodes(nodes) {
-    let result = [];
+    let result = []
     for (const node of nodes) {
-      result.push(node);
+      result.push(node)
       if (node.children && node.children.length > 0) {
-        result = result.concat(flattenNodes(node.children));
+        result = result.concat(flattenNodes(node.children))
       }
     }
-    return result;
+    return result
   }
 
   const allNodes = flattenNodes(nodes);
@@ -123,22 +166,48 @@ export function generateHtmlFromNodes(nodes, isRoot = true) {
   // Improved detection logic
   const hasTable = detectTable(allNodes) !== null;
   const hasNotificationForm = detectNotificationForm(allNodes);
-  
+  const isLoginRelated = detectLoginRelatedScreen(allNodes);
+
+  // Check for specific login-related screens
+  const isForgotPassword = allNodes.find(
+    n => n.type === 'TEXT' &&
+         n.characters &&
+         /forgot password/i.test(n.characters)
+  );
+
+  const isChangePassword = allNodes.find(
+    n => n.type === 'TEXT' &&
+         n.characters &&
+         /change password/i.test(n.characters)
+  );
+
   // Determine the primary content type based on what we detect
   let primaryContentType = 'unknown';
-  if (hasTable) {
+  if (isLoginRelated) {
+    if (isForgotPassword) {
+      primaryContentType = 'forgot_password';
+    } else if (isChangePassword) {
+      primaryContentType = 'change_password';
+    } else {
+      primaryContentType = 'login';
+    }
+  } else if (hasTable) {
     primaryContentType = 'table';
   } else if (hasNotificationForm) {
     primaryContentType = 'notification';
   }
-  
+
   // Use the detected content type to influence form type detection
-  let formType = primaryContentType === 'notification' ? 'notification' : 
-                 primaryContentType === 'table' ? 'users' : 
-                 detectFormType(allNodes);
+  let formType =
+    primaryContentType === 'notification' ? 'notification' :
+    primaryContentType === 'table' ? 'users' :
+    primaryContentType === 'login' ? 'login' :
+    primaryContentType === 'forgot_password' ? 'forgot_password' :
+    primaryContentType === 'change_password' ? 'change_password' :
+    detectFormType(allNodes);
 
   // Detect layout components
-  const hasSidebar = detectSidebar(allNodes);
+  const hasSidebar = detectSidebar(allNodes) && !isLoginRelated; // Don't show sidebar for login screens
   const tabs = detectTabs(allNodes);
   const searchInput = detectSearchInput(allNodes);
   const tableNode = detectTable(allNodes);
@@ -148,14 +217,14 @@ export function generateHtmlFromNodes(nodes, isRoot = true) {
   // Start with proper Bootstrap container structure
   if (hasSidebar) {
     // Create a container-fluid for full-width layout with sidebar
-    html += `<div class="container-fluid p-0">\n`;
-    html += `  <div class="row g-0">\n`;
+    html += `<div class="container-fluid p-0">\n`
+    html += `  <div class="row g-0">\n`
 
     // Add the sidebar as the first column
-    html += generateSidebar(allNodes, formType);
+    html += generateSidebar(allNodes, formType)
 
     // Start the main content column
-    html += `    <div class="col p-4">\n`;
+    html += `    <div class="col p-4">\n`
   } else {
     // For login forms or other centered content without sidebar
     html += `<div class="container d-flex justify-content-center align-items-center" style="min-height: 100vh;">\n`;
@@ -167,28 +236,30 @@ export function generateHtmlFromNodes(nodes, isRoot = true) {
     n => n.type === 'TEXT' &&
          n.characters &&
          n.characters.length < 30 &&
-         (/users|add event|login/i.test(n.characters))
+         (/users|add event|login|forgot password|change password/i.test(n.characters))
   );
 
   if (titleNode) {
-    if (formType === 'login') {
+    if (formType === 'login' || formType === 'forgot_password' || formType === 'change_password') {
       html += `<h2 class="text-center mb-4">${titleNode.characters}</h2>\n`;
     } else {
       html += `<h2 class="fw-bold mb-4">${titleNode.characters}</h2>\n`;
     }
   }
 
-  // Tabs (if present)
-  if (tabs.length > 1) {
-    html += `<ul class="nav nav-tabs mb-4">\n`;
+  // Tabs (if present and not on login screens)
+  if (tabs.length > 1 && !isLoginRelated) {
+    html += `<ul class="nav nav-tabs mb-4">\n`
     tabs.forEach((tab, idx) => {
-      html += `  <li class="nav-item"><a class="nav-link${idx === 0 ? ' active' : ''}" href="#">${tab.characters}</a></li>\n`;
-    });
-    html += `</ul>\n`;
+      html += `  <li class="nav-item"><a class="nav-link${
+        idx === 0 ? ' active' : ''
+      }" href="#">${tab.characters}</a></li>\n`
+    })
+    html += `</ul>\n`
   }
 
-  // Search input (if present)
-  if (searchInput && formType !== 'login') {
+  // Search input (if present or for users table, but not for login screens)
+  if ((searchInput || formType === 'users') && !isLoginRelated) {
     html += `<div class="d-flex justify-content-end mb-3">
       <form class="d-flex" role="search">
         <input class="form-control me-2" type="search" placeholder="Search" aria-label="Search">
@@ -199,293 +270,327 @@ export function generateHtmlFromNodes(nodes, isRoot = true) {
 
   // For event form, wrap fields in a card
   if (formType === 'event') {
-    html += `<div class="card mb-4">\n`;
-    html += `  <div class="card-body">\n`;
+    html += `<div class="card mb-4">\n`
+    html += `  <div class="card-body">\n`
   }
 
   // For login form, add form with shadow
-  if (formType === 'login') {
+  if (formType === 'login' || formType === 'forgot_password' || formType === 'change_password') {
     html += `<div class="card shadow-sm">\n`;
     html += `  <div class="card-body p-4">\n`;
   }
 
-  // Table (if present)
-  if (tableNode && formType !== 'login') {
-    // Extract headers
-    const headerRow = tableNode.children.filter(
-      child =>
-        child.type === 'TEXT' &&
-        /no\.|profile photo|name|email|registered on|action/i.test(child.characters)
-    );
-
-    // Extract data rows
-    const dataRows = [];
-    let currentRow = [];
-    tableNode.children.forEach(child => {
-      if (
-        child.type === 'TEXT' &&
-        !/no\.|profile photo|name|email|registered on|action/i.test(child.characters)
-      ) {
-        currentRow.push(child.characters);
-        if (currentRow.length === headerRow.length) {
-          dataRows.push([...currentRow]);
-          currentRow = [];
-        }
+  // Table (if present and not on login screens)
+  if (tableNode && !isLoginRelated) {
+    // Extract all text nodes from the table
+    function getAllTextNodes(node) {
+      let result = []
+      if (node.type === 'TEXT') {
+        result.push(node)
       }
-    });
-
-    html += `<div class="card mb-4">\n`;
-    html += `  <div class="card-body p-0">\n`;
-    html += `    <div class="table-responsive">\n`;
-    html += `      <table class="table table-hover align-middle mb-0">\n`;
-    html += `        <thead class="bg-light">\n`;
-    html += `          <tr>\n`;
-    html += `            ${headerRow.map(h => `<th class="px-4 py-3">${h.characters}</th>`).join('\n')}\n`;
-    html += `          </tr>\n`;
-    html += `        </thead>\n`;
-    html += `        <tbody>\n`;
-
-    // If we have actual data rows, use them
-    if (dataRows.length > 0) {
-      html += `          ${dataRows
-        .map(row => `<tr>${row.map(cell => `<td class="px-4 py-3">${cell}</td>`).join('')}</tr>`)
-        .join('\n')}\n`;
-    } else {
-      // Otherwise generate sample data
-      html += `          <tr>
-            <td class="px-4 py-3">01</td>
-            <td class="px-4 py-3"><img src="https://via.placeholder.com/32" class="rounded-circle" alt="Profile"></td>
-            <td class="px-4 py-3">David Wagner</td>
-            <td class="px-4 py-3">mail@mail.com</td>
-            <td class="px-4 py-3">MM/DD/YYYY</td>
-            <td class="px-4 py-3"><button class="btn btn-sm btn-light rounded-circle"><i class="bi bi-arrow-repeat"></i></button></td>
-          </tr>\n`;
+      if (node.children) {
+        node.children.forEach((child) => {
+          result = result.concat(getAllTextNodes(child))
+        })
+      }
+      return result
     }
 
-    html += `        </tbody>\n`;
-    html += `      </table>\n`;
-    html += `    </div>\n`;
+    const allTableTextNodes = getAllTextNodes(tableNode)
+
+    // Find header texts
+    const headerNodes = allTableTextNodes.filter((node) =>
+      /no\.|profile|photo|name|email|registered|action/i.test(node.characters)
+    )
+
+    // Sort headers by X position
+    headerNodes.sort(
+      (a, b) =>
+        (a.absoluteBoundingBox?.x || 0) - (b.absoluteBoundingBox?.x || 0)
+    )
+
+    // Find all potential data rows (text nodes that aren't headers)
+    const dataTextNodes = allTableTextNodes.filter(
+      (node) => !headerNodes.includes(node)
+    )
+
+    // Group by Y position to form rows
+    const rowGroups = {}
+    dataTextNodes.forEach((node) => {
+      if (!node.absoluteBoundingBox) return
+
+      // Group by Y position with some tolerance (10px bands)
+      const y = Math.round(node.absoluteBoundingBox.y / 10) * 10
+      if (!rowGroups[y]) rowGroups[y] = []
+      rowGroups[y].push(node)
+    })
+
+    // Sort each row by X position
+    Object.keys(rowGroups).forEach((y) => {
+      rowGroups[y].sort(
+        (a, b) =>
+          (a.absoluteBoundingBox?.x || 0) - (b.absoluteBoundingBox?.x || 0)
+      )
+    })
+
+    // Convert to data rows
+    const dataRows = Object.keys(rowGroups)
+      .sort((a, b) => parseInt(a) - parseInt(b))
+      .map((y) => rowGroups[y])
+
+    // Generate sample data if we don't have enough rows
+    const sampleData = [
+      ['01', 'David Wagner', 'mail@mail.com', 'MM/DD/YYYY'],
+      ['02', 'Ina Hogan', 'mail@mail.com', 'MM/DD/YYYY'],
+      ['03', 'David Wagner', 'mail@mail.com', 'MM/DD/YYYY'],
+      ['04', 'Ina Hogan', 'mail@mail.com', 'MM/DD/YYYY'],
+      ['05', 'David Wagner', 'mail@mail.com', 'MM/DD/YYYY'],
+      ['06', 'Ina Hogan', 'mail@mail.com', 'MM/DD/YYYY'],
+      ['07', 'David Wagner', 'mail@mail.com', 'MM/DD/YYYY'],
+      ['08', 'Ina Hogan', 'mail@mail.com', 'MM/DD/YYYY'],
+      ['09', 'Ina Hogan', 'mail@mail.com', 'MM/DD/YYYY'],
+      ['10', 'Ina Hogan', 'mail@mail.com', 'MM/DD/YYYY'],
+      ['11', 'Ina Hogan', 'mail@mail.com', 'MM/DD/YYYY'],
+    ]
+
+    // Generate table HTML
+    html += `<div class="card mb-4">\n`
+    html += `  <div class="card-body p-0">\n`
+    html += `    <div class="table-responsive">\n`
+    html += `      <table class="table table-hover align-middle mb-0">\n`
+    html += `        <thead class="bg-light">\n`
+    html += `          <tr>\n`
+
+    // Ensure we have all standard headers
+    const standardHeaders = [
+      'No.',
+      'Profile Photo',
+      'Name',
+      'Email',
+      'Registered on',
+      'Action',
+    ]
+    const foundHeaders = headerNodes.map((h) => h.characters)
+
+    // Use found headers, but ensure we have all standard ones
+    const finalHeaders = standardHeaders.map((header) => {
+      const matchingHeader = foundHeaders.find((h) =>
+        h.toLowerCase().includes(header.toLowerCase())
+      )
+      return matchingHeader || header
+    })
+
+    html += `            ${finalHeaders
+      .map((h) => `<th class="px-4 py-3">${h}</th>`)
+      .join('\n')}\n`
+    html += `          </tr>\n`
+    html += `        </thead>\n`
+    html += `        <tbody>\n`
+
+    // Use actual data rows if we have them, otherwise use sample data
+    if (dataRows.length >= 5) {
+      dataRows.forEach((row) => {
+        html += `          <tr>\n`
+
+        // Map row data to columns based on X position
+        finalHeaders.forEach((header, index) => {
+          // Find the cell that best matches this column position
+          const bestMatch = row.find((cell) => {
+            if (!cell.absoluteBoundingBox) return false
+
+            // If we have header nodes with positions, try to align by X
+            if (headerNodes[index] && headerNodes[index].absoluteBoundingBox) {
+              const headerX = headerNodes[index].absoluteBoundingBox.x
+              const cellX = cell.absoluteBoundingBox.x
+              return Math.abs(headerX - cellX) < 50 // Within 50px
+            }
+
+            return false
+          })
+
+          if (bestMatch) {
+            if (header.toLowerCase().includes('photo')) {
+              html += `            <td class="px-4 py-3"><img src="https://via.placeholder.com/32" class="rounded-circle" alt="Profile"></td>\n`
+            } else if (header.toLowerCase().includes('action')) {
+              html += `            <td class="px-4 py-3"><button class="btn btn-sm btn-light rounded-circle"><i class="bi bi-arrow-repeat"></i></button></td>\n`
+            } else {
+              html += `            <td class="px-4 py-3">${bestMatch.characters}</td>\n`
+            }
+          } else {
+            // Fallback for missing cells
+            if (header.toLowerCase().includes('photo')) {
+              html += `            <td class="px-4 py-3"><img src="https://via.placeholder.com/32" class="rounded-circle" alt="Profile"></td>\n`
+            } else if (header.toLowerCase().includes('action')) {
+              html += `            <td class="px-4 py-3"><button class="btn btn-sm btn-light rounded-circle"><i class="bi bi-arrow-repeat"></i></button></td>\n`
+            } else {
+              html += `            <td class="px-4 py-3"></td>\n`
+            }
+          }
+        })
+
+        html += `          </tr>\n`
+      })
+    } else {
+      // Use sample data
+      sampleData.forEach((row) => {
+        html += `          <tr>\n`
+        html += `            <td class="px-4 py-3">${row[0]}</td>\n`
+        html += `            <td class="px-4 py-3"><img src="https://via.placeholder.com/32" class="rounded-circle" alt="Profile"></td>\n`
+        html += `            <td class="px-4 py-3">${row[1]}</td>\n`
+        html += `            <td class="px-4 py-3">${row[2]}</td>\n`
+        html += `            <td class="px-4 py-3">${row[3]}</td>\n`
+        html += `            <td class="px-4 py-3"><button class="btn btn-sm btn-light rounded-circle"><i class="bi bi-arrow-repeat"></i></button></td>\n`
+        html += `          </tr>\n`
+      })
+    }
+
+    html += `        </tbody>\n`
+    html += `      </table>\n`
+    html += `    </div>\n`
 
     // Pagination
-    html += `    <nav aria-label="Table navigation" class="d-flex justify-content-between align-items-center p-3 border-top">\n`;
-    html += `      <div>Items per page: <select class="form-select form-select-sm d-inline-block w-auto"><option>10</option></select></div>\n`;
-    html += `      <ul class="pagination pagination-sm mb-0">\n`;
-    html += `        <li class="page-item disabled"><a class="page-link" href="#">Previous</a></li>\n`;
-    html += `        <li class="page-item active"><a class="page-link" href="#">1</a></li>\n`;
-    html += `        <li class="page-item"><a class="page-link" href="#">2</a></li>\n`;
-    html += `        <li class="page-item"><a class="page-link" href="#">Next</a></li>\n`;
-    html += `      </ul>\n`;
-    html += `    </nav>\n`;
-    html += `  </div>\n`;
-    html += `</div>\n`;
+    html += `    <nav aria-label="Table navigation" class="d-flex justify-content-between align-items-center p-3 border-top">\n`
+    html += `      <div>Items per page: <select class="form-select form-select-sm d-inline-block w-auto"><option>10</option></select></div>\n`
+    html += `      <ul class="pagination pagination-sm mb-0">\n`
+    html += `        <li class="page-item disabled"><a class="page-link" href="#">Previous</a></li>\n`
+    html += `        <li class="page-item active"><a class="page-link" href="#">1</a></li>\n`
+    html += `        <li class="page-item"><a class="page-link" href="#">2</a></li>\n`
+    html += `        <li class="page-item"><a class="page-link" href="#">Next</a></li>\n`
+    html += `      </ul>\n`
+    html += `    </nav>\n`
+    html += `  </div>\n`
+    html += `</div>\n`
   }
 
-  // Form fields - only show if we don't have a table or if we explicitly detected a form
-  if ((formType === 'login' || formType === 'event' || formType === 'notification') && 
-      (primaryContentType !== 'table' || primaryContentType === 'notification')) {
-    html += `<form>\n`;
-
-    // Detect form fields
-    const formFields = detectFormFields(allNodes, formType);
-
-    // Generate form fields HTML
-    formFields.forEach(field => {
-      const { label, type, required, options } = field;
-
-      html += `  <div class="mb-3">\n`;
-      html += `    <label class="form-label">${label}${required ? '<span class="text-danger">*</span>' : ''}</label>\n`;
-
-      if (type === 'textarea') {
-        html += `    <textarea class="form-control" placeholder="Type text here" rows="3"></textarea>\n`;
-      } else if (type === 'select') {
-        html += `    <select class="form-select">\n`;
-        html += `      <option selected disabled>Select ${label.toLowerCase()}</option>\n`;
-        if (options && options.length) {
-          options.forEach(opt => {
-            html += `      <option>${opt}</option>\n`;
-          });
-        }
-        html += `    </select>\n`;
-      } else if (type === 'radio') {
-        html += `    <div>\n`;
-        if (options && options.length) {
-          options.forEach((opt, idx) => {
-            html += `      <div class="form-check form-check-inline">\n`;
-            html += `        <input class="form-check-input" type="radio" name="${label.toLowerCase().replace(/\s+/g, '_')}" id="${label.toLowerCase().replace(/\s+/g, '_')}_${idx}" ${idx === 0 ? 'checked' : ''}>\n`;
-            html += `        <label class="form-check-label" for="${label.toLowerCase().replace(/\s+/g, '_')}_${idx}">${opt}</label>\n`;
-            html += `      </div>\n`;
-          });
-        } else {
-          html += `      <div class="form-check form-check-inline">\n`;
-          html += `        <input class="form-check-input" type="radio" name="${label.toLowerCase().replace(/\s+/g, '_')}" id="${label.toLowerCase().replace(/\s+/g, '_')}_1" checked>\n`;
-          html += `        <label class="form-check-label" for="${label.toLowerCase().replace(/\s+/g, '_')}_1">Active</label>\n`;
-          html += `      </div>\n`;
-          html += `      <div class="form-check form-check-inline">\n`;
-          html += `        <input class="form-check-input" type="radio" name="${label.toLowerCase().replace(/\s+/g, '_')}" id="${label.toLowerCase().replace(/\s+/g, '_')}_2">\n`;
-          html += `        <label class="form-check-label" for="${label.toLowerCase().replace(/\s+/g, '_')}_2">Inactive</label>\n`;
-          html += `      </div>\n`;
-        }
-        html += `    </div>\n`;
-      } else if (type === 'checkbox') {
-        html += `    <div class="form-check">\n`;
-        html += `      <input class="form-check-input" type="checkbox" id="${label.toLowerCase().replace(/\s+/g, '_')}">\n`;
-        html += `      <label class="form-check-label" for="${label.toLowerCase().replace(/\s+/g, '_')}">${label}</label>\n`;
-        html += `    </div>\n`;
-      } else if (type === 'date') {
-        html += `    <div class="input-group">\n`;
-        html += `      <input type="date" class="form-control">\n`;
-        html += `      <span class="input-group-text"><i class="bi bi-calendar"></i></span>\n`;
-        html += `    </div>\n`;
-      } else if (type === 'time') {
-        html += `    <div class="input-group">\n`;
-        html += `      <input type="time" class="form-control">\n`;
-        html += `      <span class="input-group-text"><i class="bi bi-clock"></i></span>\n`;
-        html += `    </div>\n`;
-      } else if (type === 'file' || type === 'image') {
-        html += `    <div class="text-center p-3 border rounded bg-light mb-2">\n`;
-        html += `      <i class="bi bi-upload fs-3 d-block mb-2"></i>\n`;
-        html += `      <button type="button" class="btn btn-sm btn-primary">Upload</button>\n`;
-        html += `    </div>\n`;
-      } else {
-        html += `    <input type="${type}" class="form-control" placeholder="${getPlaceholder(type, label)}">\n`;
-      }
-
-      html += `  </div>\n`;
-    });
-
-    // Add Remember me checkbox for login form
-    if (formType === 'login') {
-      html += `  <div class="form-check mb-3">\n`;
-      html += `    <input class="form-check-input" type="checkbox" id="rememberMe">\n`;
-      html += `    <label class="form-check-label" for="rememberMe">Remember me</label>\n`;
-      html += `  </div>\n`;
-    }
-
-    // Add buttons
-    if (formType === 'login') {
-      html += `  <div class="d-grid gap-2">\n`;
-      html += `    <button type="submit" class="btn btn-primary py-2">Login</button>\n`;
-      html += `  </div>\n`;
-      html += `  <div class="text-center mt-3">\n`;
-      html += `    <a href="#" class="text-decoration-none">Forgot Password?</a>\n`;
-      html += `  </div>\n`;
-    } else if (formType === 'event') {
-      html += `  <div class="d-flex gap-2 mt-4">\n`;
-      html += `    <button type="submit" class="btn btn-primary">Save</button>\n`;
-      html += `    <button type="button" class="btn btn-light">Cancel</button>\n`;
-      html += `  </div>\n`;
-    } else {
-      html += `  <div class="d-flex gap-2 mt-4">\n`;
-      html += `    <button type="submit" class="btn btn-primary">Submit</button>\n`;
-      html += `    <button type="button" class="btn btn-light">Cancel</button>\n`;
-      html += `  </div>\n`;
-    }
-
-    html += `</form>\n`;
-  }
-
-  // Close card for event form or login form
-  if (formType === 'event' || formType === 'login') {
-    html += `  </div>\n`;
-    html += `</div>\n`;
-  }
-
-  // Close containers
-  if (hasSidebar) {
-    html += `    </div>\n`;  // Close col
-    html += `  </div>\n`;    // Close row
-    html += `</div>\n`;      // Close container-fluid
-  } else {
-    html += `  </div>\n`;    // Close col-md-6
-    html += `</div>\n`;      // Close container
-  }
-
-  return html;
-}
-
-// Helper function to detect form fields based on form type
-function detectFormFields(nodes, formType) {
-  const fields = [];
-
+  // Add form fields based on form type
   if (formType === 'login') {
-    fields.push({ label: 'Email Address', type: 'email', required: true });
-    fields.push({ label: 'Password', type: 'password', required: true });
-    return fields;
+    html += generateLoginForm(allNodes);
+  } else if (formType === 'event') {
+    html += generateEventForm(allNodes);
+  } else if (formType === 'notification') {
+    html += generateNotificationForm(allNodes);
   }
 
-  if (formType === 'event') {
-    fields.push({ label: 'Event Name', type: 'text', required: true });
-    fields.push({ label: 'Event Date', type: 'date', required: true });
-    fields.push({ label: 'Event Time', type: 'time', required: true });
-    fields.push({ label: 'Payment Link', type: 'text', required: true });
-    fields.push({ label: 'Region', type: 'select', required: true, options: ['North', 'South', 'East', 'West'] });
-    fields.push({ label: 'Status', type: 'radio', required: true, options: ['Active', 'Inactive'] });
-    fields.push({ label: 'Location', type: 'text', required: true });
-    fields.push({ label: 'Event Image', type: 'file', required: false });
-    return fields;
+  // Close card divs if needed
+  if (formType === 'event' || formType === 'login') {
+    html += `  </div>\n`
+    html += `</div>\n`
   }
 
-  if (formType === 'notification') {
-    fields.push({ label: 'Notification Text', type: 'textarea', required: true });
-    fields.push({ label: 'Notification Type', type: 'radio', required: true, options: ['Now', 'Schedule'] });
-    return fields;
+  // Close the main content column
+  if (hasSidebar) {
+    html += `    </div>\n`
+    html += `  </div>\n`
+    html += `</div>\n`
+  } else {
+    html += `  </div>\n`
+    html += `</div>\n`
   }
 
-  // Default: try to detect fields from nodes
-  const textNodes = nodes.filter(n => n.type === 'TEXT' && n.characters);
+  // If this is the root call, wrap in a complete HTML document
+  if (isRoot) {
+    const title = titleNode
+      ? titleNode.characters
+      : formType.charAt(0).toUpperCase() + formType.slice(1)
+    return `<!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>${title}</title>
+          <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-SgOJa3DmI69IUzQ2PVdRZhwQ+dy64/BUtbMJw1MZ8t5HZApcHrRKUc4W0kG879m7" crossorigin="anonymous">
+          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+          <style>
+            body {
+              background-color: #fff;
+              min-height: 100vh;
 
-  textNodes.forEach(node => {
-    const text = node.characters;
-    if (/name|email|password|link|text|time|date|status|location|region/i.test(text) && text.length < 30) {
-      const type = getInputTypeFromLabel(text);
-      fields.push({
-        label: text.replace('*', '').trim(),
-        type: type,
-        required: text.includes('*')
-      });
-    }
-  });
+            }
+          </style>
+        </head>
+        <body>
+          ${html}
+          <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/js/bootstrap.bundle.min.js" integrity="sha384-k6d4wzSIapyDyv1kpU366/PK5hCdSbCRGRCMv+eplOQJWyd1fbcAu9OCUj5zNLiq" crossorigin="anonymous"></script>
+        </body>
+      </html>`
+  }
 
-  return fields;
+  return html
 }
 
-// Helper function to get placeholder text based on input type and label
-function getPlaceholder(type, label) {
-  const labelLower = label.toLowerCase();
-
-  if (type === 'email') return 'Enter email address';
-  if (type === 'password') return 'Enter password';
-  if (type === 'text') {
-    if (labelLower.includes('name')) return 'Enter name';
-    if (labelLower.includes('link')) return 'Add payment link here';
-    if (labelLower.includes('location')) return 'Type address here';
-    return 'Type text here';
-  }
-
-  return '';
+function generateLoginForm(nodes) {
+  let html = ''
+  html += `<form>\n`
+  html += `  <div class="mb-3">\n`
+  html += `    <label for="email" class="form-label">Email</label>\n`
+  html += `    <input type="email" class="form-control" id="email" placeholder="Enter your email">\n`
+  html += `  </div>\n`
+  html += `  <div class="mb-3">\n`
+  html += `    <label for="password" class="form-label">Password</label>\n`
+  html += `    <input type="password" class="form-control" id="password" placeholder="Enter your password">\n`
+  html += `  </div>\n`
+  html += `  <div class="mb-3 form-check">\n`
+  html += `    <input type="checkbox" class="form-check-input" id="remember">\n`
+  html += `    <label class="form-check-label" for="remember">Remember me</label>\n`
+  html += `  </div>\n`
+  html += `  <button type="submit" class="btn btn-primary w-100">Login</button>\n`
+  html += `</form>\n`
+  return html
 }
 
-// Helper function to determine input type from label
-function getInputTypeFromLabel(label) {
-  const labelLower = label.toLowerCase();
-
-  if (labelLower.includes('email')) return 'email';
-  if (labelLower.includes('password')) return 'password';
-  if (labelLower.includes('date')) return 'date';
-  if (labelLower.includes('time')) return 'time';
-  if (labelLower.includes('image') || labelLower.includes('photo')) return 'file';
-  if (labelLower.includes('status')) return 'radio';
-  if (labelLower.includes('region') || labelLower.includes('select')) return 'select';
-  if (labelLower.includes('text') && labelLower.includes('notification')) return 'textarea';
-  if (labelLower.includes('remember')) return 'checkbox';
-
-  return 'text';
+function generateEventForm(nodes) {
+  let html = ''
+  html += `<form>\n`
+  html += `  <div class="mb-3">\n`
+  html += `    <label for="eventName" class="form-label">Event Name</label>\n`
+  html += `    <input type="text" class="form-control" id="eventName">\n`
+  html += `  </div>\n`
+  html += `  <div class="mb-3">\n`
+  html += `    <label for="eventDate" class="form-label">Event Date</label>\n`
+  html += `    <input type="date" class="form-control" id="eventDate">\n`
+  html += `  </div>\n`
+  html += `  <div class="mb-3">\n`
+  html += `    <label for="eventDescription" class="form-label">Description</label>\n`
+  html += `    <textarea class="form-control" id="eventDescription" rows="3"></textarea>\n`
+  html += `  </div>\n`
+  html += `  <button type="submit" class="btn btn-primary">Save Event</button>\n`
+  html += `</form>\n`
+  return html
 }
 
+function generateNotificationForm(nodes) {
+  let html = ''
+  html += `<div class="card mb-4">\n`
+  html += `  <div class="card-body">\n`
+  html += `    <form>\n`
+  html += `      <div class="mb-3">\n`
+  html += `        <label for="notificationType" class="form-label">Notification Type</label>\n`
+  html += `        <select class="form-select" id="notificationType">\n`
+  html += `          <option>Information</option>\n`
+  html += `          <option>Warning</option>\n`
+  html += `          <option>Critical</option>\n`
+  html += `        </select>\n`
+  html += `      </div>\n`
+  html += `      <div class="mb-3">\n`
+  html += `        <label for="notificationText" class="form-label">Notification Text</label>\n`
+  html += `        <textarea class="form-control" id="notificationText" rows="3"></textarea>\n`
+  html += `      </div>\n`
+  html += `      <div class="mb-3">\n`
+  html += `        <label for="notificationRecipients" class="form-label">Recipients</label>\n`
+  html += `        <select class="form-select" id="notificationRecipients">\n`
+  html += `          <option>All Users</option>\n`
+  html += `          <option>Admins Only</option>\n`
+  html += `          <option>Selected Users</option>\n`
+  html += `        </select>\n`
+  html += `      </div>\n`
+  html += `      <button type="submit" class="btn btn-primary">Send Notification</button>\n`
+  html += `    </form>\n`
+  html += `  </div>\n`
+  html += `</div>\n`
+  return html
+}
 
-// Add this function after the existing functions but before generateHtmlFromNodes
 function generateSidebar(nodes, formType) {
-  // Find logo for sidebar
   const logoNode = nodes.find(
     (n) =>
       (n.type === 'IMAGE' || n.type === 'VECTOR' || n.type === 'FRAME') &&
@@ -507,7 +612,7 @@ function generateSidebar(nodes, formType) {
         !/no\.|profile|photo|email|registered|action/i.test(n.characters) && // Exclude table headers
         !/user|profile|log out|sign out/i.test(n.characters) // Exclude user profile items
     )
-    .sort((a, b) => a.absoluteBoundingBox.y - b.absoluteBoundingBox.y);
+    .sort((a, b) => a.absoluteBoundingBox.y - b.absoluteBoundingBox.y)
 
   // Find user profile text if any
   const userProfileText = nodes.find(
