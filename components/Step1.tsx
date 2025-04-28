@@ -4,16 +4,16 @@ import { Button } from '@/components/ui/button'
 
 export default function Step1({ figmaUrl, setFigmaUrl, isProcessing, handleProcessClick }) {
   return (
-    <div className="flex flex-col items-center justify-center space-y-4 w-full max-w-lg mx-auto">
+    <div className="flex flex-col items-center justify-center space-y-4 w-full max-w-xl mx-auto">
       <div className="w-full space-y-2">
-        <Label htmlFor="figmaUrl">Figma URL</Label>
+        <Label htmlFor="figmaUrl" className="text-lg">Figma URL</Label>
         <Input
           id="figmaUrl"
           type="text"
           placeholder="Enter Figma URL (e.g., https://www.figma.com/...)"
           value={figmaUrl}
           onChange={(e) => setFigmaUrl(e.target.value)}
-          className="w-full"
+          className="w-full text-md"
           disabled={isProcessing}
         />
       </div>
