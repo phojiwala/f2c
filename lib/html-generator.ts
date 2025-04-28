@@ -142,11 +142,11 @@ function detectNotificationForm(nodes) {
 function detectLoginRelatedScreen(nodes) {
   // Look for login, forgot password, or change password text
   return nodes.find(
-    n =>
+    (n) =>
       n.type === 'TEXT' &&
       n.characters &&
       /login|forgot password|change password|reset password/i.test(n.characters)
-  );
+  )
 }
 
 export function generateHtmlFromNodes(nodes, isRoot = true) {
@@ -161,58 +161,61 @@ export function generateHtmlFromNodes(nodes, isRoot = true) {
     return result
   }
 
-  const allNodes = flattenNodes(nodes);
+  const allNodes = flattenNodes(nodes)
 
   // Improved detection logic
-  const hasTable = detectTable(allNodes) !== null;
-  const hasNotificationForm = detectNotificationForm(allNodes);
-  const isLoginRelated = detectLoginRelatedScreen(allNodes);
+  const hasTable = detectTable(allNodes) !== null
+  const hasNotificationForm = detectNotificationForm(allNodes)
+  const isLoginRelated = detectLoginRelatedScreen(allNodes)
 
   // Check for specific login-related screens
   const isForgotPassword = allNodes.find(
-    n => n.type === 'TEXT' &&
-         n.characters &&
-         /forgot password/i.test(n.characters)
-  );
+    (n) =>
+      n.type === 'TEXT' && n.characters && /forgot password/i.test(n.characters)
+  )
 
   const isChangePassword = allNodes.find(
-    n => n.type === 'TEXT' &&
-         n.characters &&
-         /change password/i.test(n.characters)
-  );
+    (n) =>
+      n.type === 'TEXT' && n.characters && /change password/i.test(n.characters)
+  )
 
   // Determine the primary content type based on what we detect
-  let primaryContentType = 'unknown';
+  let primaryContentType = 'unknown'
   if (isLoginRelated) {
     if (isForgotPassword) {
-      primaryContentType = 'forgot_password';
+      primaryContentType = 'forgot_password'
     } else if (isChangePassword) {
-      primaryContentType = 'change_password';
+      primaryContentType = 'change_password'
     } else {
-      primaryContentType = 'login';
+      primaryContentType = 'login'
     }
   } else if (hasTable) {
-    primaryContentType = 'table';
+    primaryContentType = 'table'
   } else if (hasNotificationForm) {
-    primaryContentType = 'notification';
+    primaryContentType = 'notification'
   }
 
   // Use the detected content type to influence form type detection
   let formType =
-    primaryContentType === 'notification' ? 'notification' :
-    primaryContentType === 'table' ? 'users' :
-    primaryContentType === 'login' ? 'login' :
-    primaryContentType === 'forgot_password' ? 'forgot_password' :
-    primaryContentType === 'change_password' ? 'change_password' :
-    detectFormType(allNodes);
+    primaryContentType === 'notification'
+      ? 'notification'
+      : primaryContentType === 'table'
+      ? 'users'
+      : primaryContentType === 'login'
+      ? 'login'
+      : primaryContentType === 'forgot_password'
+      ? 'forgot_password'
+      : primaryContentType === 'change_password'
+      ? 'change_password'
+      : detectFormType(allNodes)
 
   // Detect layout components
-  const hasSidebar = detectSidebar(allNodes) && !isLoginRelated; // Don't show sidebar for login screens
-  const tabs = detectTabs(allNodes);
-  const searchInput = detectSearchInput(allNodes);
-  const tableNode = detectTable(allNodes);
+  const hasSidebar = detectSidebar(allNodes) && !isLoginRelated // Don't show sidebar for login screens
+  const tabs = detectTabs(allNodes)
+  const searchInput = detectSearchInput(allNodes)
+  const tableNode = detectTable(allNodes)
 
-  let html = '';
+  let html = ''
 
   // Start with proper Bootstrap container structure
   if (hasSidebar) {
@@ -227,23 +230,30 @@ export function generateHtmlFromNodes(nodes, isRoot = true) {
     html += `    <div class="col p-4">\n`
   } else {
     // For login forms or other centered content without sidebar
-    html += `<div class="container d-flex justify-content-center align-items-center" style="min-height: 100vh;">\n`;
-    html += `  <div class="col-md-6">\n`;
+    html += `<div class="container d-flex justify-content-center align-items-center" style="min-height: 100vh;">\n`
+    html += `  <div class="col-md-6">\n`
   }
 
   // Page title
   const titleNode = allNodes.find(
-    n => n.type === 'TEXT' &&
-         n.characters &&
-         n.characters.length < 30 &&
-         (/users|add event|login|forgot password|change password/i.test(n.characters))
-  );
+    (n) =>
+      n.type === 'TEXT' &&
+      n.characters &&
+      n.characters.length < 30 &&
+      /users|add event|login|forgot password|change password/i.test(
+        n.characters
+      )
+  )
 
   if (titleNode) {
-    if (formType === 'login' || formType === 'forgot_password' || formType === 'change_password') {
-      html += `<h2 class="text-center mb-4">${titleNode.characters}</h2>\n`;
+    if (
+      formType === 'login' ||
+      formType === 'forgot_password' ||
+      formType === 'change_password'
+    ) {
+      html += `<h2 class="text-center mb-4">${titleNode.characters}</h2>\n`
     } else {
-      html += `<h2 class="fw-bold mb-4">${titleNode.characters}</h2>\n`;
+      html += `<h2 class="fw-bold mb-4">${titleNode.characters}</h2>\n`
     }
   }
 
@@ -265,7 +275,7 @@ export function generateHtmlFromNodes(nodes, isRoot = true) {
         <input class="form-control me-2" type="search" placeholder="Search" aria-label="Search">
         <button class="btn btn-outline-primary" type="submit">Search</button>
       </form>
-    </div>\n`;
+    </div>\n`
   }
 
   // For event form, wrap fields in a card
@@ -275,9 +285,13 @@ export function generateHtmlFromNodes(nodes, isRoot = true) {
   }
 
   // For login form, add form with shadow
-  if (formType === 'login' || formType === 'forgot_password' || formType === 'change_password') {
-    html += `<div class="card shadow-sm">\n`;
-    html += `  <div class="card-body p-4">\n`;
+  if (
+    formType === 'login' ||
+    formType === 'forgot_password' ||
+    formType === 'change_password'
+  ) {
+    html += `<div class="card shadow-sm">\n`
+    html += `  <div class="card-body p-4">\n`
   }
 
   // Table (if present and not on login screens)
@@ -464,11 +478,11 @@ export function generateHtmlFromNodes(nodes, isRoot = true) {
 
   // Add form fields based on form type
   if (formType === 'login') {
-    html += generateLoginForm(allNodes);
+    html += generateLoginForm(allNodes)
   } else if (formType === 'event') {
-    html += generateEventForm(allNodes);
+    html += generateEventForm(allNodes)
   } else if (formType === 'notification') {
-    html += generateNotificationForm(allNodes);
+    html += generateNotificationForm(allNodes)
   }
 
   // Close card divs if needed
@@ -489,51 +503,142 @@ export function generateHtmlFromNodes(nodes, isRoot = true) {
 
   // If this is the root call, wrap in a complete HTML document
   if (isRoot) {
-    const title = titleNode
-      ? titleNode.characters
-      : formType.charAt(0).toUpperCase() + formType.slice(1)
-    return `<!DOCTYPE html>
-      <html lang="en">
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>${title}</title>
-          <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-SgOJa3DmI69IUzQ2PVdRZhwQ+dy64/BUtbMJw1MZ8t5HZApcHrRKUc4W0kG879m7" crossorigin="anonymous">
-          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-          <style>
-            body {
-              background-color: #fff;
-              min-height: 100vh;
-
-            }
-          </style>
-        </head>
-        <body>
-          ${html}
-          <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/js/bootstrap.bundle.min.js" integrity="sha384-k6d4wzSIapyDyv1kpU366/PK5hCdSbCRGRCMv+eplOQJWyd1fbcAu9OCUj5zNLiq" crossorigin="anonymous"></script>
-        </body>
-      </html>`
+    return html
   }
 
   return html
 }
 
 function generateLoginForm(nodes) {
+  // Find all input-like rectangles/frames
+  const inputCandidates = nodes.filter(
+    (n) =>
+      (n.type === 'RECTANGLE' || n.type === 'FRAME') &&
+      n.absoluteBoundingBox &&
+      n.absoluteBoundingBox.height < 70 &&
+      n.absoluteBoundingBox.width > 100
+  )
+
+  // Find potential labels
+  const labelNodes = nodes.filter(
+    (n) =>
+      n.type === 'TEXT' &&
+      n.characters &&
+      /email|mail|username|password|pwd/i.test(n.characters)
+  )
+
+  // Find submit button
+  const buttonNode = nodes.find(
+    (n) =>
+      (n.type === 'RECTANGLE' || n.type === 'FRAME') &&
+      ((n.children &&
+        n.children.some(
+          (child) =>
+            child.type === 'TEXT' &&
+            /login|sign in|submit|log in/i.test(child.characters)
+        )) ||
+        (n.name && /button|login|submit/i.test(n.name)))
+  )
+
+  const buttonText =
+    buttonNode && buttonNode.children
+      ? buttonNode.children.find((c) => c.type === 'TEXT')?.characters ||
+        'Login'
+      : 'Login'
+
+  // Find checkbox for "Remember me"
+  const checkboxNode = nodes.find(
+    (n) =>
+      (n.type === 'RECTANGLE' || n.type === 'ELLIPSE') &&
+      n.absoluteBoundingBox &&
+      n.absoluteBoundingBox.width < 30 &&
+      n.absoluteBoundingBox.height < 30
+  )
+
+  // Find "Forgot Password" link
+  const forgotPasswordNode = nodes.find(
+    (n) =>
+      n.type === 'TEXT' &&
+      n.characters &&
+      /forgot|reset|recover/i.test(n.characters)
+  )
+
+  // Start building the form
   let html = ''
   html += `<form>\n`
-  html += `  <div class="mb-3">\n`
-  html += `    <label for="email" class="form-label">Email</label>\n`
-  html += `    <input type="email" class="form-control" id="email" placeholder="Enter your email">\n`
-  html += `  </div>\n`
-  html += `  <div class="mb-3">\n`
-  html += `    <label for="password" class="form-label">Password</label>\n`
-  html += `    <input type="password" class="form-control" id="password" placeholder="Enter your password">\n`
-  html += `  </div>\n`
-  html += `  <div class="mb-3 form-check">\n`
-  html += `    <input type="checkbox" class="form-check-input" id="remember">\n`
-  html += `    <label class="form-check-label" for="remember">Remember me</label>\n`
-  html += `  </div>\n`
-  html += `  <button type="submit" class="btn btn-primary w-100">Login</button>\n`
+
+  // If we don't have enough detected inputs, create standard ones
+  if (inputCandidates.length < 2 && labelNodes.length < 2) {
+    // Email field
+    html += `  <div class="mb-3">\n`
+    html += `    <label for="email" class="form-label">Email Address</label>\n`
+    html += `    <input type="email" class="form-control" id="email" placeholder="Enter your email">\n`
+    html += `  </div>\n`
+
+    // Password field
+    html += `  <div class="mb-3">\n`
+    html += `    <label for="password" class="form-label">Password</label>\n`
+    html += `    <div class="input-group">\n`
+    html += `      <input type="password" class="form-control" id="password" placeholder="Enter your password">\n`
+    html += `      <button class="btn btn-outline-secondary" type="button">\n`
+    html += `        <i class="bi bi-eye"></i>\n`
+    html += `      </button>\n`
+    html += `    </div>\n`
+    html += `  </div>\n`
+  } else {
+    // Create fields based on detected labels
+    labelNodes.forEach((label, index) => {
+      const isPassword = /password|pwd/i.test(label.characters)
+      const fieldId = isPassword ? 'password' : 'email'
+      const fieldType = isPassword ? 'password' : 'email'
+      const placeholder = `Enter your ${label.characters.toLowerCase()}`
+
+      html += `  <div class="mb-3">\n`
+      html += `    <label for="${fieldId}" class="form-label">${label.characters}</label>\n`
+
+      if (isPassword) {
+        html += `    <div class="input-group">\n`
+        html += `      <input type="${fieldType}" class="form-control" id="${fieldId}" placeholder="${placeholder}">\n`
+        html += `      <button class="btn btn-outline-secondary" type="button">\n`
+        html += `        <i class="bi bi-eye"></i>\n`
+        html += `      </button>\n`
+        html += `    </div>\n`
+      } else {
+        html += `    <input type="${fieldType}" class="form-control" id="${fieldId}" placeholder="${placeholder}">\n`
+      }
+
+      html += `  </div>\n`
+    })
+  }
+
+  // Remember me checkbox
+  if (checkboxNode) {
+    html += `  <div class="mb-3 form-check">\n`
+    html += `    <input type="checkbox" class="form-check-input" id="remember">\n`
+    html += `    <label class="form-check-label" for="remember">Remember me</label>\n`
+    html += `  </div>\n`
+  } else {
+    // Add default checkbox
+    html += `  <div class="mb-3 form-check">\n`
+    html += `    <input type="checkbox" class="form-check-input" id="remember">\n`
+    html += `    <label class="form-check-label" for="remember">Remember me</label>\n`
+    html += `  </div>\n`
+  }
+
+  // Login button
+  html += `  <button type="submit" class="btn btn-primary w-100 mb-3">${buttonText}</button>\n`
+
+  // Forgot password link
+  if (forgotPasswordNode) {
+    html += `  <div class="text-center">\n`
+    html += `    <a href="#" class="text-decoration-none">${forgotPasswordNode.characters}</a>\n`
+    html += `  </div>\n`
+  } else {
+    html += `  <div class="text-center">\n`
+    html += `    <a href="#" class="text-decoration-none">Forgot Password?</a>\n`
+    html += `  </div>\n`
+  }
+
   html += `</form>\n`
   return html
 }
