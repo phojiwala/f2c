@@ -19,7 +19,10 @@ import Step2 from '@/components/Step2'
 import Step3 from '@/components/Step3'
 import { generateHtmlFromNodes } from '@/lib/html-generator'
 import { downloadImages } from '@/lib/figma-api'
-import { enhanceComponentStyles, generateCssFromStyles } from '@/lib/css-generator'
+import {
+  enhanceComponentStyles,
+  generateCssFromStyles,
+} from '@/lib/css-generator'
 import { detectComponentType } from '@/lib/utils'
 
 export default function Home() {
@@ -41,12 +44,22 @@ export default function Home() {
     return match ? match[2] : null
   }
 
+  // Add this new function to extract node ID from URL
+  const extractNodeId = (url) => {
+    const regex = /node-id=([0-9]+-[0-9]+)/
+    const match = url.match(regex)
+    return match ? match[1] : null
+  }
+
   const fetchFigmaFile = useCallback(
     async (fileKey) => {
       setIsProcessing(true)
       setFigmaData(null)
       setFrames([])
       setSelectedFrames([])
+
+      // Extract node ID if present in URL
+      const nodeId = extractNodeId(figmaUrl)
 
       try {
         const metaResponse = await fetch(
@@ -90,22 +103,27 @@ export default function Home() {
           document: contentData.document,
         }
 
+        console.log(combinedData)
+
         setFigmaData(combinedData)
 
-        const extracted = extractFrames(combinedData.document)
+        // Modify this to filter by node ID if present
+        const extracted = extractFrames(combinedData.document, nodeId)
         setFrames(extracted)
 
         if (extracted.length > 0) {
           setStep(2)
           toast({
             title: 'Figma File Loaded',
-            description: `Found ${extracted.length} frames.`,
+            description: `Found ${extracted.length} frames${nodeId ? ' in selected section' : ''}.`,
           })
         } else {
           toast({
             title: 'No Frames Found',
             description:
-              'Could not find any frames or components in this Figma file.',
+              nodeId
+                ? 'Could not find any frames in the selected section of this Figma file.'
+                : 'Could not find any frames or components in this Figma file.',
             variant: 'destructive',
           })
         }
@@ -124,7 +142,7 @@ export default function Home() {
         setIsProcessing(false)
       }
     },
-    [toast]
+    [toast, figmaUrl] // Add figmaUrl to dependencies
   )
 
   const handleProcessClick = async () => {
@@ -165,53 +183,105 @@ export default function Home() {
     }
   }
 
-  const extractFrames = (documentNode) => {
+  // Change this line to include the nodeId parameter
+  const extractFrames = (documentNode, nodeId = null) => {
     const topLevelFrames = []
+    let targetNodeFound = false;
 
-    const findTopLevelNodes = (node) => {
-      if (node.type === 'CANVAS' && node.children) {
-        node.children.forEach((child) => {
-          if (
-            child.type === 'FRAME' ||
-            child.type === 'COMPONENT' ||
-            child.type === 'COMPONENT_SET'
-          ) {
-            topLevelFrames.push({
-              id: child.id,
-              name: child.name,
-              type: child.type,
-              children: child.children,
-              absoluteBoundingBox: child.absoluteBoundingBox,
-              fills: child.fills,
-              strokes: child.strokes,
-              strokeWeight: child.strokeWeight,
-              cornerRadius: child.cornerRadius,
-              style: child.style,
-              characters: child.characters,
-              effects: child.effects,
-            })
-          }
-        })
-      } else if (node.children) {
-        node.children.forEach((child) => {
-          const updatedChild = { ...child }
-          if (child.type === 'TEXT') {
-            updatedChild.characters = child.characters
-          }
-          if (child.effects) {
-            updatedChild.effects = child.effects
-          }
-          child = updatedChild
-          findTopLevelNodes(child)
-        })
+    // Function to check if a node matches the nodeId
+    const matchesNodeId = (node) => {
+      if (!nodeId) return true // If no nodeId specified, include all
+      const formattedNodeId = `${node.id}`.replace(':', '-')
+      return formattedNodeId === nodeId
+    }
+
+    // Recursive function to find the target node and extract its frames
+    const findNodeById = (node) => {
+      // Check if this is our target node
+      if (nodeId && matchesNodeId(node)) {
+        targetNodeFound = true;
+        
+        // Extract frames from this specific node
+        if (node.children) {
+          node.children.forEach((child) => {
+            if (
+              child.type === 'FRAME' ||
+              child.type === 'COMPONENT' ||
+              child.type === 'COMPONENT_SET'
+            ) {
+              topLevelFrames.push({
+                id: child.id,
+                name: child.name,
+                type: child.type,
+                children: child.children,
+                absoluteBoundingBox: child.absoluteBoundingBox,
+                fills: child.fills,
+                strokes: child.strokes,
+                strokeWeight: child.strokeWeight,
+                cornerRadius: child.cornerRadius,
+                style: child.style,
+                characters: child.characters,
+                effects: child.effects,
+              })
+            }
+          });
+        }
+        return true; // Stop further traversal in this branch
       }
+      
+      // If we haven't found our target node yet, keep searching
+      if (nodeId && !targetNodeFound && node.children) {
+        for (const child of node.children) {
+          if (findNodeById(child)) {
+            return true; // Target node found in this branch
+          }
+        }
+      }
+      
+      // If no nodeId specified or we're still looking, process normally
+      if (!nodeId) {
+        if (node.type === 'CANVAS' && node.children) {
+          node.children.forEach((child) => {
+            if (
+              child.type === 'FRAME' ||
+              child.type === 'COMPONENT' ||
+              child.type === 'COMPONENT_SET'
+            ) {
+              topLevelFrames.push({
+                id: child.id,
+                name: child.name,
+                type: child.type,
+                children: child.children,
+                absoluteBoundingBox: child.absoluteBoundingBox,
+                fills: child.fills,
+                strokes: child.strokes,
+                strokeWeight: child.strokeWeight,
+                cornerRadius: child.cornerRadius,
+                style: child.style,
+                characters: child.characters,
+                effects: child.effects,
+              })
+            }
+          })
+        }
+      }
+      
+      return false; // Target node not found in this branch
     }
 
     if (documentNode) {
-      findTopLevelNodes(documentNode)
+      findNodeById(documentNode);
+      
+      // If we were looking for a specific node but didn't find it,
+      // log a warning and fall back to showing all frames
+      if (nodeId && !targetNodeFound) {
+        console.warn(`Node with ID ${nodeId} not found, showing all frames`);
+        // Optionally fall back to showing all frames
+        // findTopLevelNodes(documentNode);
+      }
     }
 
-    return topLevelFrames
+    return topLevelFrames;
   }
 
   const handleFrameSelection = (frameId) => {
@@ -254,7 +324,9 @@ export default function Home() {
           <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
           <style>
             body {
-              background-color: ${componentType === 'login-form' ? '#f7f7fa' : '#fff'};
+              background-color: ${
+                componentType === 'login-form' ? '#f7f7fa' : '#fff'
+              };
               min-height: 100vh;
               ${
                 shouldCenter

@@ -107,3 +107,15 @@ export function findLogoNode(nodes, titleNode) {
       n.absoluteBoundingBox.height > 40
   )
 }
+
+export function findInputCandidates(nodes) {
+  return nodes.filter(
+    (node) =>
+      (node.type === 'RECTANGLE' || node.type === 'FRAME') &&
+      (node.name?.toLowerCase().includes('input') ||
+        node.name?.toLowerCase().includes('field') ||
+        node.name?.toLowerCase().includes('email') ||
+        node.name?.toLowerCase().includes('password') ||
+        node.name?.toLowerCase().includes('search'))
+  )
+}
