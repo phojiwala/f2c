@@ -21,9 +21,71 @@ import {
   findLogoNode,
   isSubmitButton,
   isCheckboxLabel,
-  findInputCandidates, // Import helper to find input fields
+  findInputCandidates,
 } from './figma-node-helpers'
 import { detectFormType, detectSidebar } from './utils'
+
+function getImageUrl(node, imageUrlMap) {
+  if (!node) return null
+
+  if (imageUrlMap.has(node.id)) {
+    return imageUrlMap.get(node.id)
+  }
+
+  if (node.fills?.some((fill) => fill.type === 'IMAGE' && fill.imageRef)) {
+    const imageFill = node.fills.find(
+      (fill) => fill.type === 'IMAGE' && fill.imageRef
+    )
+    if (imageFill && imageUrlMap.has(imageFill.imageRef)) {
+      return imageUrlMap.get(imageFill.imageRef)
+    }
+  }
+
+  return null
+}
+
+function figmaStyleToCss(styleObj) {
+  if (!styleObj) return ''
+  const css = []
+  for (const [key, value] of Object.entries(styleObj)) {
+    switch (key) {
+      case 'fontFamily':
+        css.push(`font-family: "${value}"`);
+        break;
+      case 'fontWeight':
+        css.push(`font-weight: ${value}`);
+        break;
+      case 'fontStyle':
+        css.push(`font-style: ${String(value).toLowerCase()}`);
+        break;
+      case 'fontSize':
+        css.push(`font-size: ${value}px`);
+        break;
+      case 'textAlignHorizontal':
+        css.push(`text-align: ${String(value).toLowerCase()}`);
+        break;
+      case 'letterSpacing':
+        css.push(`letter-spacing: ${value}px`);
+        break;
+      case 'lineHeightPx':
+        css.push(`line-height: ${value}px`);
+        break;
+      case 'color':
+        if (typeof value === 'object' && value.r !== undefined) {
+          const r = Math.round(value.r * 255);
+          const g = Math.round(value.g * 255);
+          const b = Math.round(value.b * 255);
+          const a = value.a !== undefined ? value.a : 1;
+          css.push(`color: rgba(${r},${g},${b},${a})`);
+        }
+        break;
+      default:
+        const kebabKey = key.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
+        css.push(`${kebabKey}: ${value}`);
+    }
+  }
+  return css.join('; ');
+}
 
 export function generateHtmlFromNodes(
   nodes,
@@ -130,21 +192,18 @@ export function generateHtmlFromNodes(
   const tableNode = detectTable(allNodes)
 
   let html = ''
-  const logoNode = findLogoNode(allNodes) // Find logo node
+  let dynamicStyles = ''; // <-- Add this to collect dynamic CSS
+  const logoNode = findLogoNode(allNodes);
 
-  // --- Add detailed logging before accessing the map ---
   if (logoNode) {
-    console.log(
-      `HTML_GEN: Found logo node - ID: ${logoNode.id}, Name: ${logoNode.name}, Type: ${logoNode.type}`
-    )
-    // Log the map content to see if the ID exists as a key
-    console.log(
-      `HTML_GEN: ImageUrlMap received:`,
-      JSON.stringify(Array.from(imageUrlMap.entries()))
-    )
-    console.log(`HTML_GEN: Attempting to get URL for ID: ${logoNode.id}`)
-  } else {
-    console.log('HTML_GEN: Logo node NOT found by findLogoNode.')
+    const logoUrl = getImageUrl(logoNode, imageUrlMap)
+    if (logoUrl) {
+      html += `  <div class="mb-4">\n`
+      html += `    <img src="${logoUrl}" alt="Logo" style="max-width:180px; max-height:80px; object-fit:contain;" />\n`
+      html += `  </div>\n`
+    } else {
+      console.warn(`HTML_GEN: Could not find URL for logo node: ${logoNode.id}`)
+    }
   }
 
   // Start with proper Bootstrap container structure
@@ -161,8 +220,6 @@ export function generateHtmlFromNodes(
   } else {
     // For login forms or other centered content without sidebar
     html += `<div class="container d-flex flex-column justify-content-center align-items-center" style="min-height: 100vh;">\n`
-    // Add logo if found and it's a login/password screen
-    // Ensure logoNode exists before trying to access its properties or the map
     if (
       logoNode &&
       (formType === 'login' ||
@@ -171,7 +228,7 @@ export function generateHtmlFromNodes(
     ) {
       // Get the URL from the map using the logo node's ID
       const logoUrl = imageUrlMap.get(logoNode.id) // Use the ID found here
-      console.log('HTML_GEN: Result of imageUrlMap.get(logoNode.id):', logoUrl) // Log the actual result
+      // console.log('HTML_GEN: Result of imageUrlMap.get(logoNode.id):', logoUrl) // Log the actual result
 
       if (logoUrl) {
         html += `  <div class="mb-4">\n`
@@ -196,7 +253,6 @@ export function generateHtmlFromNodes(
     html += `  <div class="col-11 col-sm-8 col-md-6 col-lg-4">\n` // Responsive column width
   }
 
-  // Wrap form content in a card for login/password screens
   if (
     formType === 'login' ||
     formType === 'forgot_password' ||
@@ -205,18 +261,22 @@ export function generateHtmlFromNodes(
     html += `<div class="card shadow-sm">\n` // Using shadow-sm for subtlety like in image 2
     html += `  <div class="card-body p-4">\n` // Standard padding
 
-    // --- Generate Title INSIDE the card body ---
     if (mainTitleNode) {
-      const titleStyle = mainTitleNode.style || {}
-      const titleCss = `font-weight: ${
-        titleStyle.fontWeight || 700
-      }; font-size: ${
-        titleStyle.fontSize || 24
-      }px; color: #000; text-align: center;`
-      console.log('Detected Title Node:', mainTitleNode)
-      html += `<h2 class="text-center mb-4" style="${titleCss}">${mainTitleNode.characters}</h2>\n`
+      const titleStyle = mainTitleNode.style || {};
+      const className = `figma-title-${mainTitleNode.id.replace(':', '-')}`;
+      const titleCss = figmaStyleToCss(titleStyle);
+
+      console.log(mainTitleNode, titleStyle, className)
+
+      if (titleCss) {
+        dynamicStyles += `.${className} { ${titleCss} }\n`;
+      }
+      const bootstrapClasses = ['mb-4'];
+      if (!titleStyle.textAlignHorizontal) {
+        bootstrapClasses.push('text-center');
+      }
+      html += `<h2 class="${bootstrapClasses.join(' ')} ${className}">${mainTitleNode.characters}</h2>\n`;
     } else {
-      // Fallback title inside card
       if (formType === 'login') {
         html += `<h2 class="text-center mb-4" style="font-weight: 700; font-size: 24px; color: #000;">Login</h2>\n`
       } else if (formType === 'forgot_password') {
@@ -226,7 +286,6 @@ export function generateHtmlFromNodes(
       }
       console.warn('Main title node not found, using fallback.')
     }
-    // --- End Title Generation ---
   } else if (formType === 'event') {
     // Event form might also benefit from a card
     html += `<div class="card shadow-sm mb-4">\n`
@@ -487,8 +546,9 @@ export function generateHtmlFromNodes(
 
   // If this is the root call, wrap in a complete HTML document
   if (isRoot) {
-    return html
+    // Inject dynamic styles at the top of the HTML
+    return `<style>${dynamicStyles}</style>\n` + html;
   }
 
-  return html
+  return html;
 }

@@ -96,22 +96,38 @@ export function findTitleNode(nodes) {
 }
 
 export function findLogoNode(nodes) {
-  let logo = nodes.find((n) => n.name && /logo/i.test(n.name) && (
-    (n.type === 'RECTANGLE' || n.type === 'FRAME' || n.type === 'COMPONENT') &&
-    n.fills && Array.isArray(n.fills) && n.fills.some((fill) => fill.type === 'IMAGE')
-  ) ||
-    n.type === 'IMAGE');
+  return nodes.find((node) => {
+    const isLogo =
+      node.name === 'Logo' &&
+      node.type === 'RECTANGLE' &&
+      node.fills?.some((fill) => fill.type === 'IMAGE')
+    return isLogo
+  })
+}
 
-  if (logo) return logo;
+export function findAllImageNodes(nodes) {
+  const imageNodes = []
 
-  logo = nodes.find((n) =>
-    (n.type === 'RECTANGLE' || n.type === 'FRAME' || n.type === 'COMPONENT') &&
-    n.fills && Array.isArray(n.fills) && n.fills.some((fill) => fill.type === 'IMAGE') &&
-    n.absoluteBoundingBox && n.absoluteBoundingBox.y < 200
-  );
+  const traverseNodes = (node) => {
+    if (
+      node.type === 'RECTANGLE' &&
+      node.fills?.some((fill) => fill.type === 'IMAGE' && fill.imageRef)
+    ) {
+      imageNodes.push(node)
+    }
 
-  return logo;
-} 
+    if (node.type === 'IMAGE' && node.id) {
+      imageNodes.push(node)
+    }
+
+    if (node.children && Array.isArray(node.children)) {
+      node.children.forEach(traverseNodes)
+    }
+  }
+
+  nodes.forEach(traverseNodes)
+  return imageNodes
+}
 
 export function findInputCandidates(nodes) {
   return nodes.filter(
