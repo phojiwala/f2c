@@ -24,16 +24,14 @@ export default function Main({ step, renderStepContent, figmaData, isProcessing,
       {figmaData && (step === 1 || step === 2) && !isProcessing && (
         <div className="mt-12 w-full max-w-md mx-auto">
           <Card className="p-6 shadow-md">
-            <h3 className="text-lg font-semibold mb-4 border-b pb-2">
+            <h3 className="text-lg font-semibold">
               {figmaData.name}
             </h3>
             <div className="space-y-2 text-sm text-muted-foreground">
-              <p>
+              <p className='mb-4'>
                 Last Modified:{' '}
                 {new Date(figmaData.lastModified).toLocaleString()}
               </p>
-              <p>Components: {figmaData.components}</p>
-              <p>Styles: {figmaData.styles}</p>
               {figmaData.thumbnailUrl && (
                 <img
                   src={figmaData.thumbnailUrl}
