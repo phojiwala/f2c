@@ -91,6 +91,8 @@ export const fetchFrameThumbnails = async (fileKey, nodeIds, accessToken) => {
     return new Map()
   }
 
+  // console.log(fileKey, accessToken)
+
   const thumbnailMap = new Map()
   try {
     const idsString = nodeIds.join(',')

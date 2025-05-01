@@ -8,6 +8,12 @@ const multer = require('multer');
 const sharp = require('sharp');
 const axios = require('axios');
 
+// --- Import necessary helper functions ---
+const { flattenNodes, findLogoNode } = require('../lib/figma-node-helpers'); // Adjust path if needed
+const { fetchFrameThumbnails } = require('../lib/figma-api'); // Adjust path if needed
+const { generateHtmlFromNodes } = require('../lib/html-generator'); // Adjust path if needed
+// --- End imports ---
+
 const app = express();
 const port = process.env.PORT || 3001;
 
@@ -62,36 +68,74 @@ app.post('/api/figma/fetch', async (req, res) => {
 
 app.post('/api/figma/generate', async (req, res) => {
   try {
-    const { fileKey, accessToken } = req.body;
-    const response = await axios.get(`https://api.figma.com/v1/files/${fileKey}`, {
+    // --- Get selectedNodeId from request body ---
+    const { fileKey, accessToken, selectedNodeId } = req.body;
+
+    if (!selectedNodeId) {
+      return res.status(400).json({ error: 'selectedNodeId is required' });
+    }
+    // --- End getting selectedNodeId ---
+
+    // Fetch only the nodes for the selected frame/component
+    const nodeResponse = await axios.get(`https://api.figma.com/v1/files/${fileKey}/nodes?ids=${selectedNodeId}`, {
       headers: { 'X-Figma-Token': accessToken }
     });
-    const components = extractComponents(response.data);
-    res.json(components);
+
+    // --- Check if the node was found ---
+    if (!nodeResponse.data.nodes || !nodeResponse.data.nodes[selectedNodeId] || !nodeResponse.data.nodes[selectedNodeId].document) {
+        console.error('Selected node not found in Figma response:', selectedNodeId, nodeResponse.data);
+        return res.status(404).json({ error: `Node ${selectedNodeId} not found in file ${fileKey}` });
+    }
+    // --- End node check ---
+
+    // Get the actual node data for the selected frame
+    const selectedFrameNode = nodeResponse.data.nodes[selectedNodeId].document;
+    // Use the children of the selected frame/component for generation
+    const frameNodesToProcess = selectedFrameNode.children || [selectedFrameNode]; // Handle cases where the node itself is the target
+
+    // Flatten nodes for searching (logo, etc.)
+    const allNodes = flattenNodes(frameNodesToProcess);
+
+    const logoNode = findLogoNode(allNodes);
+    console.log('API_GEN: Found logoNode:', logoNode ? `ID: ${logoNode.id}` : 'None'); // Backend log
+
+    const imageNodeIdsToFetch = [];
+    if (logoNode && logoNode.id) {
+      imageNodeIdsToFetch.push(logoNode.id);
+    }
+    // --- Log the IDs we are *about* to fetch ---
+    console.log('API_GEN: Attempting to fetch image URLs for IDs:', imageNodeIdsToFetch);
+
+    let imageUrlMap = new Map(); // Initialize map
+    if (imageNodeIdsToFetch.length > 0) {
+      try {
+          // --- Log *before* the actual API call ---
+          console.log(`API_GEN: Calling fetchFrameThumbnails with fileKey: ${fileKey}, ids: ${JSON.stringify(imageNodeIdsToFetch)}`);
+          imageUrlMap = await fetchFrameThumbnails(fileKey, imageNodeIdsToFetch, accessToken);
+          // --- Log the result *immediately* after the call ---
+          console.log('API_GEN: fetchFrameThumbnails returned map:', JSON.stringify(Array.from(imageUrlMap.entries())));
+      } catch (fetchError) {
+          console.error("API_GEN: Error calling fetchFrameThumbnails:", fetchError.response ? fetchError.response.data : fetchError.message);
+          // Keep imageUrlMap as empty Map on error
+      }
+    } else {
+        console.log("API_GEN: No image node IDs found to fetch.");
+    }
+
+    // --- Log the map *just before* passing it to the generator ---
+    console.log('API_GEN: Passing this imageUrlMap to generateHtmlFromNodes:', JSON.stringify(Array.from(imageUrlMap.entries())));
+    const generatedHtml = generateHtmlFromNodes(frameNodesToProcess, imageUrlMap);
+
+    res.json({ html: generatedHtml });
+
   } catch (error) {
-    console.error('Error generating components:', error);
-    res.status(500).json({ error: 'Failed to generate components' });
+    console.error('API_GEN: Error in /api/figma/generate endpoint:', error.response ? error.response.data : error.message);
+    res.status(500).json({ error: 'Failed to generate code' });
   }
 });
 
-function extractComponents(figmaData) {
-  const components = [];
-  function traverse(node) {
-    if (node.type === 'FRAME' || node.type === 'COMPONENT') {
-      components.push({
-        name: node.name,
-        type: node.type,
-        styles: node.styles || {},
-        children: node.children ? node.children.map(child => child.id) : []
-      });
-    }
-    if (node.children) {
-      node.children.forEach(traverse);
-    }
-  }
-  traverse(figmaData.document);
-  return components;
-}
+// Remove or comment out the old extractComponents function if no longer needed
+// function extractComponents(figmaData) { ... }
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);

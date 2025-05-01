@@ -62,6 +62,8 @@ export default function Step2({
     loadThumbnails()
   }, [frames, figmaUrl, accessToken, toast])
 
+  // console.log(thumbnails)
+
   return (
     <div className="space-y-6">
       <div className="text-center">

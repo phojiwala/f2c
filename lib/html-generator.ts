@@ -25,7 +25,11 @@ import {
 } from './figma-node-helpers'
 import { detectFormType, detectSidebar } from './utils'
 
-export function generateHtmlFromNodes(nodes, isRoot = true) {
+export function generateHtmlFromNodes(
+  nodes,
+  imageUrlMap = new Map(),
+  isRoot = true
+) {
   function flattenNodes(nodes) {
     let result = []
     for (const node of nodes) {
@@ -38,7 +42,6 @@ export function generateHtmlFromNodes(nodes, isRoot = true) {
   }
 
   const allNodes = flattenNodes(nodes)
-
   // Improved detection logic
   const hasTable = detectTable(allNodes) !== null
   const hasNotificationForm = detectNotificationForm(allNodes)
@@ -129,6 +132,21 @@ export function generateHtmlFromNodes(nodes, isRoot = true) {
   let html = ''
   const logoNode = findLogoNode(allNodes) // Find logo node
 
+  // --- Add detailed logging before accessing the map ---
+  if (logoNode) {
+    console.log(
+      `HTML_GEN: Found logo node - ID: ${logoNode.id}, Name: ${logoNode.name}, Type: ${logoNode.type}`
+    )
+    // Log the map content to see if the ID exists as a key
+    console.log(
+      `HTML_GEN: ImageUrlMap received:`,
+      JSON.stringify(Array.from(imageUrlMap.entries()))
+    )
+    console.log(`HTML_GEN: Attempting to get URL for ID: ${logoNode.id}`)
+  } else {
+    console.log('HTML_GEN: Logo node NOT found by findLogoNode.')
+  }
+
   // Start with proper Bootstrap container structure
   if (hasSidebar) {
     // Create a container-fluid for full-width layout with sidebar
@@ -144,18 +162,36 @@ export function generateHtmlFromNodes(nodes, isRoot = true) {
     // For login forms or other centered content without sidebar
     html += `<div class="container d-flex flex-column justify-content-center align-items-center" style="min-height: 100vh;">\n`
     // Add logo if found and it's a login/password screen
+    // Ensure logoNode exists before trying to access its properties or the map
     if (
       logoNode &&
       (formType === 'login' ||
         formType === 'forgot_password' ||
         formType === 'change_password')
     ) {
-      const logoFilename = logoNode.id
-        ? `${logoNode.id.split(':')[0]}.png`
-        : 'logo.png'
-      html += `  <div class="mb-4">\n`
-      html += `    <img src="images/${logoFilename}" alt="Logo" style="max-width:180px; max-height:80px; object-fit:contain;" />\n`
-      html += `  </div>\n`
+      // Get the URL from the map using the logo node's ID
+      const logoUrl = imageUrlMap.get(logoNode.id) // Use the ID found here
+      console.log('HTML_GEN: Result of imageUrlMap.get(logoNode.id):', logoUrl) // Log the actual result
+
+      if (logoUrl) {
+        html += `  <div class="mb-4">\n`
+        // Use the fetched logoUrl in the src attribute
+        html += `    <img src="${logoUrl}" alt="Logo" style="max-width:180px; max-height:80px; object-fit:contain;" />\n`
+        html += `  </div>\n`
+      } else {
+        // Log the ID again for clarity on failure
+        console.warn(
+          `HTML_GEN: Logo URL was undefined in map for node ID: ${logoNode.id}`
+        )
+      }
+    } else if (
+      !logoNode &&
+      (formType === 'login' ||
+        formType === 'forgot_password' ||
+        formType === 'change_password')
+    ) {
+      // Log if logo wasn't found but was expected for this form type
+      console.warn('HTML_GEN: Logo node was not found, cannot display logo.')
     }
     html += `  <div class="col-11 col-sm-8 col-md-6 col-lg-4">\n` // Responsive column width
   }

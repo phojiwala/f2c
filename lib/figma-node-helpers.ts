@@ -95,18 +95,23 @@ export function findTitleNode(nodes) {
   )
 }
 
-export function findLogoNode(nodes, titleNode) {
-  return nodes.find(
-    (n) =>
-      n.type === 'IMAGE' &&
-      n.absoluteBoundingBox &&
-      titleNode &&
-      n.absoluteBoundingBox.y + n.absoluteBoundingBox.height <
-        titleNode.absoluteBoundingBox.y &&
-      n.absoluteBoundingBox.width > 40 &&
-      n.absoluteBoundingBox.height > 40
-  )
-}
+export function findLogoNode(nodes) {
+  let logo = nodes.find((n) => n.name && /logo/i.test(n.name) && (
+    (n.type === 'RECTANGLE' || n.type === 'FRAME' || n.type === 'COMPONENT') &&
+    n.fills && Array.isArray(n.fills) && n.fills.some((fill) => fill.type === 'IMAGE')
+  ) ||
+    n.type === 'IMAGE');
+
+  if (logo) return logo;
+
+  logo = nodes.find((n) =>
+    (n.type === 'RECTANGLE' || n.type === 'FRAME' || n.type === 'COMPONENT') &&
+    n.fills && Array.isArray(n.fills) && n.fills.some((fill) => fill.type === 'IMAGE') &&
+    n.absoluteBoundingBox && n.absoluteBoundingBox.y < 200
+  );
+
+  return logo;
+} 
 
 export function findInputCandidates(nodes) {
   return nodes.filter(
