@@ -44,9 +44,19 @@ function getImageUrl(node, imageUrlMap) {
   return null
 }
 
-function figmaStyleToCss(styleObj) {
-  if (!styleObj) return ''
-  const css = []
+// Add this helper function to generate a class name for a node
+// Make sure this function is properly defined and exported
+export function generateNodeClassName(node) {
+  if (!node || !node.id) return '';
+  return `figma-${node.type.toLowerCase()}-${node.id.replace(/[:;]/g, '-')}`;
+}
+
+// Enhance the figmaStyleToCss function to handle more style properties
+export function figmaStyleToCss(styleObj) {
+  if (!styleObj) return '';
+  const css = [];
+
+  // Add all style properties
   for (const [key, value] of Object.entries(styleObj)) {
     switch (key) {
       case 'fontFamily':
@@ -79,12 +89,49 @@ function figmaStyleToCss(styleObj) {
           css.push(`color: rgba(${r},${g},${b},${a})`);
         }
         break;
+      // Add padding properties
+      case 'paddingLeft':
+        css.push(`padding-left: ${value}px`);
+        break;
+      case 'paddingRight':
+        css.push(`padding-right: ${value}px`);
+        break;
+      case 'paddingTop':
+        css.push(`padding-top: ${value}px`);
+        break;
+      case 'paddingBottom':
+        css.push(`padding-bottom: ${value}px`);
+        break;
       default:
         const kebabKey = key.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
         css.push(`${kebabKey}: ${value}`);
     }
   }
+
   return css.join('; ');
+}
+
+// Add this function to process all nodes and collect their styles
+function collectNodeStyles(nodes) {
+  let styles = '';
+
+  function processNode(node) {
+    if (node.style) {
+      const className = generateNodeClassName(node);
+      const css = figmaStyleToCss(node.style);
+      if (css) {
+        styles += `.${className} { ${css} }\n`;
+      }
+    }
+
+    // Process children recursively
+    if (node.children && node.children.length > 0) {
+      node.children.forEach(processNode);
+    }
+  }
+
+  nodes.forEach(processNode);
+  return styles;
 }
 
 export function generateHtmlFromNodes(
@@ -192,7 +239,7 @@ export function generateHtmlFromNodes(
   const tableNode = detectTable(allNodes)
 
   let html = ''
-  let dynamicStyles = ''; // <-- Add this to collect dynamic CSS
+  let dynamicStyles = collectNodeStyles(nodes); // Collect all node styles
   const logoNode = findLogoNode(allNodes);
 
   if (logoNode) {
@@ -258,24 +305,13 @@ export function generateHtmlFromNodes(
     formType === 'forgot_password' ||
     formType === 'change_password'
   ) {
-    html += `<div class="card shadow-sm">\n` // Using shadow-sm for subtlety like in image 2
-    html += `  <div class="card-body p-4">\n` // Standard padding
+    html += `<div class="card shadow-sm">\n`
+    html += `  <div class="card-body p-4">\n`
 
     if (mainTitleNode) {
-      const titleStyle = mainTitleNode.style || {};
-      const className = `figma-title-${mainTitleNode.id.replace(':', '-')}`;
-      const titleCss = figmaStyleToCss(titleStyle);
-
-      console.log(mainTitleNode, titleStyle, className)
-
-      if (titleCss) {
-        dynamicStyles += `.${className} { ${titleCss} }\n`;
-      }
-      const bootstrapClasses = ['mb-4'];
-      if (!titleStyle.textAlignHorizontal) {
-        bootstrapClasses.push('text-center');
-      }
-      html += `<h2 class="${bootstrapClasses.join(' ')} ${className}">${mainTitleNode.characters}</h2>\n`;
+      const className = generateNodeClassName(mainTitleNode);
+      // Apply the class to the title element
+      html += `<h2 class="text-center mb-4 ${className}">${mainTitleNode.characters}</h2>\n`;
     } else {
       if (formType === 'login') {
         html += `<h2 class="text-center mb-4" style="font-weight: 700; font-size: 24px; color: #000;">Login</h2>\n`
@@ -285,7 +321,7 @@ export function generateHtmlFromNodes(
         html += `<h2 class="text-center mb-4" style="font-weight: 700; font-size: 24px; color: #000;">Change Password</h2>\n`
       }
       console.warn('Main title node not found, using fallback.')
-    }
+    } 
   } else if (formType === 'event') {
     // Event form might also benefit from a card
     html += `<div class="card shadow-sm mb-4">\n`
@@ -511,16 +547,17 @@ export function generateHtmlFromNodes(
   }
 
   // Add form fields based on form type
+  // When calling form generation functions
   if (formType === 'login') {
-    html += generateLoginForm(allNodes)
+    html += generateLoginForm(allNodes, generateNodeClassName);
   } else if (formType === 'forgot_password') {
-    html += generateForgotPasswordForm(allNodes)
+    html += generateForgotPasswordForm(allNodes, generateNodeClassName);
   } else if (formType === 'change_password') {
-    html += generateChangePasswordForm(allNodes)
+    html += generateChangePasswordForm(allNodes, generateNodeClassName);
   } else if (formType === 'event') {
-    html += generateEventForm(allNodes)
+    html += generateEventForm(allNodes, generateNodeClassName);
   } else if (formType === 'notification') {
-    html += generateNotificationForm(allNodes)
+    html += generateNotificationForm(allNodes, generateNodeClassName);
   }
 
   // Close card divs if needed
@@ -547,7 +584,7 @@ export function generateHtmlFromNodes(
   // If this is the root call, wrap in a complete HTML document
   if (isRoot) {
     // Inject dynamic styles at the top of the HTML
-    return `<style>${dynamicStyles}</style>\n` + html;
+    return `<style>\n${dynamicStyles}</style>\n` + html;
   }
 
   return html;
