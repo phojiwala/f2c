@@ -1,8 +1,5 @@
 import { isSubmitButton } from './figma-node-helpers';
-// Remove this import to avoid circular dependency
-// import { generateNodeClassName } from './html-generator';
 
-// Define the function locally to avoid circular dependency
 function generateNodeClassName(node) {
   if (!node || !node.id) return '';
   return `figma-${node.type.toLowerCase()}-${node.id.replace(/[:;]/g, '-')}`;
@@ -517,4 +514,167 @@ export function generateChangePasswordForm(nodes) {
 
   html += `</form>\n`
   return html
+}
+
+export function generateBusinessForm(nodes, generateNodeClassName = (node) => '') {
+  // Recursively collect all field groups (GROUP or FRAME with Label/Input/Placeholder)
+  function collectFieldGroups(node, groups = []) {
+    if (
+      (node.type === 'GROUP' || node.type === 'FRAME') &&
+      node.children &&
+      node.children.some(child => child.name?.toLowerCase() === 'label')
+    ) {
+      groups.push(node);
+    }
+    if (node.children) {
+      node.children.forEach(child => collectFieldGroups(child, groups));
+    }
+    return groups;
+  }
+
+  // Flatten all nodes for button search
+  function flattenNodes(nodes) {
+    let result = [];
+    for (const node of nodes) {
+      result.push(node);
+      if (node.children) {
+        result = result.concat(flattenNodes(node.children));
+      }
+    }
+    return result;
+  }
+
+  // Find all field groups in the tree
+  const fieldGroups = [];
+  nodes.forEach(node => collectFieldGroups(node, fieldGroups));
+
+  // Sort field groups by their y position for correct order
+  fieldGroups.sort((a, b) => {
+    const ay = a.absoluteBoundingBox?.y ?? 0;
+    const by = b.absoluteBoundingBox?.y ?? 0;
+    return ay - by;
+  });
+
+  // Build the form
+  let html = '';
+  html += `<form>\n`;
+
+  // For each field group, extract label, input, placeholder, and generate field HTML
+  for (const group of fieldGroups) {
+    const labelNode = group.children.find(child => child.name?.toLowerCase() === 'label');
+    const inputNode = group.children.find(child => child.name?.toLowerCase() === 'input');
+    const placeholderNode = group.children.find(child => child.name?.toLowerCase() === 'placeholder');
+    let placeholderText = '';
+    if (placeholderNode && placeholderNode.children) {
+      const placeholderInput = placeholderNode.children.find(child => child.name?.toLowerCase() === 'input');
+      if (placeholderInput && placeholderInput.characters) {
+        placeholderText = placeholderInput.characters;
+      }
+    } else if (inputNode && inputNode.characters) {
+      placeholderText = inputNode.characters;
+    }
+
+    // Determine field type
+    let fieldType = 'text';
+    const labelText = labelNode?.characters || group.name || '';
+    if (/password/i.test(labelText)) fieldType = 'password';
+    else if (/email/i.test(labelText)) fieldType = 'email';
+    else if (/url|link/i.test(labelText)) fieldType = 'url';
+    else if (/description|comment|message/i.test(labelText)) fieldType = 'textarea';
+    else if (/image|photo|picture|avatar/i.test(labelText)) fieldType = 'image';
+    else if (/select|dropdown|region|country|state/i.test(labelText)) fieldType = 'select';
+    else if (/status|active|inactive/i.test(labelText)) fieldType = 'radio';
+    else if (/time|hour/i.test(labelText)) fieldType = 'time';
+
+    // Generate class names
+    const labelClass = labelNode ? generateNodeClassName(labelNode) : '';
+    const inputClass = inputNode ? generateNodeClassName(inputNode) : '';
+
+    // Generate field HTML
+    html += `  <div class="mb-3">\n`;
+    html += `    <label class="form-label ${labelClass}">${labelText}</label>\n`;
+
+    if (fieldType === 'textarea') {
+      html += `    <textarea class="form-control ${inputClass}" placeholder="${placeholderText}"></textarea>\n`;
+    } else if (fieldType === 'select') {
+      html += `    <select class="form-select ${inputClass}">\n`;
+      html += `      <option selected disabled>${placeholderText || `Select ${labelText}`}</option>\n`;
+      html += `    </select>\n`;
+    } else if (fieldType === 'radio') {
+      html += `    <div>\n`;
+      html += `      <div class="form-check form-check-inline">\n`;
+      html += `        <input class="form-check-input" type="radio" name="${labelText}" id="${labelText}-active" checked>\n`;
+      html += `        <label class="form-check-label" for="${labelText}-active">Active</label>\n`;
+      html += `      </div>\n`;
+      html += `      <div class="form-check form-check-inline">\n`;
+      html += `        <input class="form-check-input" type="radio" name="${labelText}" id="${labelText}-inactive">\n`;
+      html += `        <label class="form-check-label" for="${labelText}-inactive">Inactive</label>\n`;
+      html += `      </div>\n`;
+      html += `    </div>\n`;
+    } else if (fieldType === 'image') {
+      html += `    <div class="d-flex align-items-center justify-content-center border rounded p-4" style="min-height: 100px;">\n`;
+      html += `      <div class="text-center">\n`;
+      html += `        <i class="bi bi-image fs-2 mb-2"></i>\n`;
+      html += `        <div><button type="button" class="btn btn-link text-decoration-none">Upload</button></div>\n`;
+      html += `      </div>\n`;
+      html += `    </div>\n`;
+    } else if (fieldType === 'time') {
+      html += `    <div class="d-flex gap-2">\n`;
+      html += `      <div class="input-group">\n`;
+      html += `        <input type="time" class="form-control ${inputClass}" placeholder="Start time">\n`;
+      html += `        <span class="input-group-text"><i class="bi bi-clock"></i></span>\n`;
+      html += `      </div>\n`;
+      html += `      <div class="input-group">\n`;
+      html += `        <input type="time" class="form-control" placeholder="End time">\n`;
+      html += `        <span class="input-group-text"><i class="bi bi-clock"></i></span>\n`;
+      html += `      </div>\n`;
+      html += `    </div>\n`;
+    } else {
+      html += `    <input type="${fieldType}" class="form-control ${inputClass}" placeholder="${placeholderText}">\n`;
+    }
+    html += `  </div>\n`;
+  }
+
+  // Find and add buttons (flatten all nodes for search)
+  const allNodes = flattenNodes(nodes);
+  const saveButton = allNodes.find(n =>
+    (n.type === 'FRAME' || n.type === 'RECTANGLE' || n.type === 'GROUP') &&
+    (n.name?.toLowerCase().includes('save') || n.name?.toLowerCase().includes('submit'))
+  );
+  const cancelButton = allNodes.find(n =>
+    (n.type === 'FRAME' || n.type === 'RECTANGLE' || n.type === 'GROUP') &&
+    n.name?.toLowerCase().includes('cancel')
+  );
+
+  html += `  <div class="d-flex gap-2">\n`;
+  if (saveButton) {
+    const saveText = findTextInNode(saveButton) || 'Save';
+    const saveClass = generateNodeClassName(saveButton);
+    html += `    <button type="submit" class="btn btn-primary ${saveClass}">${saveText}</button>\n`;
+  } else {
+    html += `    <button type="submit" class="btn btn-primary">Save</button>\n`;
+  }
+  if (cancelButton) {
+    const cancelText = findTextInNode(cancelButton) || 'Cancel';
+    const cancelClass = generateNodeClassName(cancelButton);
+    html += `    <button type="button" class="btn btn-outline-secondary ${cancelClass}">${cancelText}</button>\n`;
+  } else {
+    html += `    <button type="button" class="btn btn-outline-secondary">Cancel</button>\n`;
+  }
+  html += `  </div>\n`;
+  html += `</form>\n`;
+  return html;
+
+  // Helper to find text in a node or its children
+  function findTextInNode(node) {
+    if (!node) return null;
+    if (node.type === 'TEXT' && node.characters) return node.characters;
+    if (node.children) {
+      for (const child of node.children) {
+        const text = findTextInNode(child);
+        if (text) return text;
+      }
+    }
+    return null;
+  }
 }

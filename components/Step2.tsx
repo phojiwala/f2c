@@ -58,11 +58,19 @@ export default function Step2({
         setIsLoadingThumbnails(false)
       }
     }
-
     loadThumbnails()
   }, [frames, figmaUrl, accessToken, toast])
 
-  // console.log(thumbnails)
+  const handleSelectAll = () => {
+    if (selectedFrames.length === frames.length) {
+      setSelectedFrames([])
+    } else {
+      setSelectedFrames(frames.map((frame) => frame.id))
+    }
+  }
+
+  const allFramesSelected =
+    frames.length > 0 && selectedFrames.length === frames.length
 
   return (
     <div className="space-y-6">
@@ -119,12 +127,19 @@ export default function Step2({
         <Button variant="outline" onClick={() => setStep(1)}>
           Back
         </Button>
-        <Button
-          onClick={handleProceedToOutput}
-          disabled={selectedFrames.length === 0 || isProcessing}
-        >
-          {isProcessing ? 'Processing...' : 'Generate Code'}
-        </Button>
+        <div>
+          {frames.length > 0 && (
+            <Button variant="link" onClick={handleSelectAll}>
+              {allFramesSelected ? 'Deselect All' : 'Select All'}
+            </Button>
+          )}
+          <Button
+            onClick={handleProceedToOutput}
+            disabled={selectedFrames.length === 0 || isProcessing}
+          >
+            {isProcessing ? 'Processing...' : 'Generate Code'}
+          </Button>
+        </div>
       </div>
     </div>
   )

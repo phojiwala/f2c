@@ -5,6 +5,7 @@ import {
   generateNotificationForm,
   generateChangePasswordForm,
   generateForgotPasswordForm,
+  generateBusinessForm,
 } from './common-generators'
 import {
   detectBootstrapComponent,
@@ -27,7 +28,7 @@ import { detectFormType, detectSidebar } from './utils'
 
 function getImageUrl(node, imageUrlMap) {
   if (!node) return null
-
+  
   if (imageUrlMap.has(node.id)) {
     return imageUrlMap.get(node.id)
   }
@@ -186,7 +187,9 @@ export function generateHtmlFromNodes(
     ) && hasPasswordField // Change password must have password fields
 
   // Find the main title to help with detection
-  const mainTitleNode = findTitleNode(allNodes) // Ensure findTitleNode correctly identifies "Login"
+  const mainTitleNode = findTitleNode(allNodes.filter(n =>
+    !(n.type === 'TEXT' && n.characters?.toLowerCase().trim() === 'cancel')
+  ));
   const mainTitleText = mainTitleNode?.characters || ''
 
   // Determine the primary content type based on what we detect
@@ -216,6 +219,16 @@ export function generateHtmlFromNodes(
     primaryContentType = 'table'
   } else if (hasNotificationForm) {
     primaryContentType = 'notification'
+  } else if (mainTitleText && /add business/i.test(mainTitleText)) {
+    // Add detection for business form based on title
+    primaryContentType = 'business'
+  } else if (allNodes.some(n =>
+    n.type === 'TEXT' &&
+    n.characters &&
+    /business name|operation hours|address/i.test(n.characters)
+  )) {
+    // Alternative detection based on field labels
+    primaryContentType = 'business'
   }
 
   // Use the detected content type to influence form type detection
@@ -230,6 +243,8 @@ export function generateHtmlFromNodes(
       ? 'forgot_password'
       : primaryContentType === 'change_password'
       ? 'change_password'
+      : primaryContentType === 'business'
+      ? 'business'
       : detectFormType(allNodes) // Fallback detection
 
   // Detect layout components
@@ -321,7 +336,7 @@ export function generateHtmlFromNodes(
         html += `<h2 class="text-center mb-4" style="font-weight: 700; font-size: 24px; color: #000;">Change Password</h2>\n`
       }
       console.warn('Main title node not found, using fallback.')
-    } 
+    }
   } else if (formType === 'event') {
     // Event form might also benefit from a card
     html += `<div class="card shadow-sm mb-4">\n`
@@ -456,13 +471,16 @@ export function generateHtmlFromNodes(
     ]
     const foundHeaders = headerNodes.map((h) => h.characters)
 
-    // Use found headers, but ensure we have all standard ones
     const finalHeaders = standardHeaders.map((header) => {
       const matchingHeader = foundHeaders.find((h) =>
         h.toLowerCase().includes(header.toLowerCase())
-      )
-      return matchingHeader || header
-    })
+      );
+      const headerOverrideMap = {
+        'type name here': 'Name'
+      };
+
+      return headerOverrideMap[matchingHeader?.toLowerCase()] || matchingHeader || header;
+    });
 
     html += `            ${finalHeaders
       .map((h) => `<th class="px-4 py-3">${h}</th>`)
@@ -558,6 +576,9 @@ export function generateHtmlFromNodes(
     html += generateEventForm(allNodes, generateNodeClassName);
   } else if (formType === 'notification') {
     html += generateNotificationForm(allNodes, generateNodeClassName);
+  } else if (formType === 'business') {
+    // Add business form generation
+    html += generateBusinessForm(allNodes, generateNodeClassName);
   }
 
   // Close card divs if needed
