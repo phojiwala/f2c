@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 // Remove the dynamic export since it's not compatible with static export
 // export const dynamic = 'force-dynamic';
 

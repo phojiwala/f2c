@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
 import axios from 'axios';
 
 function getNodeType(node: any) {
