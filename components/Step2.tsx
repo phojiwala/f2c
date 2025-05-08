@@ -87,7 +87,7 @@ export default function Step2({
             key={frame.id}
             className={`p-4 cursor-pointer transition-all ${
               selectedFrames.includes(frame.id)
-                ? 'border-primary border-2'
+                ? 'outline outline-primary outline-2'
                 : 'hover:border-gray-300'
             }`}
             onClick={() => handleFrameSelection(frame.id)}

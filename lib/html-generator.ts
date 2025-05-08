@@ -32,7 +32,7 @@ function getImageUrl(node, imageUrlMap) {
   if (imageUrlMap.has(node.id)) {
     return imageUrlMap.get(node.id)
   }
- 
+
   if (node.fills?.some((fill) => fill.type === 'IMAGE' && fill.imageRef)) {
     const imageFill = node.fills.find(
       (fill) => fill.type === 'IMAGE' && fill.imageRef

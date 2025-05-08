@@ -31,11 +31,9 @@ export default function Step3({
   const [copied, setCopied] = useState({ html: false, css: false })
   const iframeRef = useRef(null)
 
-  // Get the selected frame data
   const selectedFrame = frames.find((frame) => frame.id === selectedFrameId)
   const selectedFrameName = selectedFrame?.name || 'Frame'
 
-  // Update iframe content when files change, selected frame changes, or tab changes
   useEffect(() => {
     const updateIframe = () => {
       if (iframeRef.current && generatedFiles[selectedFrameId]) {
@@ -43,7 +41,6 @@ export default function Step3({
         const iframeDoc =
           iframe.contentDocument || iframe.contentWindow.document
 
-        // Format HTML with proper indentation
         const formattedHtml = generatedFiles[selectedFrameId].html
           .replace(/></g, '>\n<')
           .split('\n')
@@ -51,22 +48,18 @@ export default function Step3({
           .map((line, i, arr) => {
             let indent = 0
             if (i > 0) {
-              // Count opening tags before this line
               for (let j = 0; j < i; j++) {
                 const prevLine = arr[j]
                 if (prevLine.match(/<[^/][^>]*[^/]>$/)) indent++
                 if (prevLine.match(/<\//)) indent--
               }
-              // Adjust for self-closing line
               if (line.match(/<[^>]+\/>/)) indent = Math.max(0, indent)
-              // Adjust for closing tag
               if (line.match(/<\//)) indent = Math.max(0, indent - 1)
             }
             return '  '.repeat(Math.max(0, indent)) + line
           })
           .join('\n')
 
-        // Format CSS with proper indentation
         const formattedCss = generatedFiles[selectedFrameId].css
           .split('}')
           .map((block) => {
@@ -83,7 +76,6 @@ export default function Step3({
           .filter(Boolean)
           .join('\n\n')
 
-        // Create final HTML with formatted CSS
         const htmlWithInlineCSS = formattedHtml.replace(
           /<link rel="stylesheet" href=".*?\.css">/,
           `<style>\n${formattedCss}\n</style>`
@@ -100,7 +92,6 @@ export default function Step3({
     }
   }, [generatedFiles, previewTab, selectedFrameId])
 
-  // Handle copy to clipboard
   const handleCopy = (type) => {
     const textToCopy =
       type === 'html'
@@ -118,11 +109,9 @@ export default function Step3({
     }
   }
 
-  // Add fullscreen state
   const [isFullscreen, setIsFullscreen] = useState(false)
   const previewContainerRef = useRef(null)
 
-  // Add fullscreen handler
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       previewContainerRef.current?.requestFullscreen()
@@ -133,7 +122,6 @@ export default function Step3({
     }
   }
 
-  // Add fullscreen change listener
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement)

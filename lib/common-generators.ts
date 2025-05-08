@@ -223,7 +223,7 @@ export function generateSidebar(nodes, formType) {
       (n) =>
         n.type === 'TEXT' &&
         n.absoluteBoundingBox &&
-        n.absoluteBoundingBox.x < 200 && // Ensure it's in the left sidebar area
+        n.absoluteBoundingBox.x < 200 && // Ensure it's in   the left sidebar area
         n.absoluteBoundingBox.width < 200 && // Not too wide (to exclude table cells)
         n.characters &&
         n.characters.length < 30 &&
