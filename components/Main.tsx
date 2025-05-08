@@ -57,17 +57,17 @@ export default function Main({ step, renderStepContent, figmaData, isProcessing,
           </h2>
           <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
             <FeatureCard
-              icon={<Download className="h-6 w-6 text-primary" />}
+              icon={<Download className="h-6 w-6 text-primary" suppressHydrationWarning />}
               title="1. Enter URL & Submit"
               description="Paste your Figma file URL and Access Token. Choose the frames or components you need."
             />
             <FeatureCard
-              icon={<Code className="h-6 w-6 text-primary" />}
+              icon={<Code className="h-6 w-6 text-primary" suppressHydrationWarning />}
               title="2. Select Frame"
               description="Get the frame based on your Figma design's properties and layout."
             />
             <FeatureCard
-              icon={<Eye className="h-6 w-6 text-primary" />}
+              icon={<Eye className="h-6 w-6 text-primary" suppressHydrationWarning />}
               title="3. Preview & Download"
               description="Download a ZIP file with HTML, CSS, and images. Refine the code for production use."
             />

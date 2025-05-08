@@ -9,6 +9,7 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: { unoptimized: true },
+  devIndicators: false
 };
 
 module.exports = nextConfig;
